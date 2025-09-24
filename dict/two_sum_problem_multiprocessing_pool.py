@@ -4,18 +4,26 @@ from typing import List, Tuple, Dict, Optional
 import multiprocessing
 import sys
 
-# --- Implémentations du problème Two Sum (fonctions inchangées) ---
+
+# --- Implémentations du problème Two Sum ---
 
 def two_sum_naive(nums: List[int], target: int) -> Optional[Tuple[int, int]]:
-    """Méthode 1: Force brute avec deux boucles imbriquées. O(n^2)."""
+    """
+    Méthode 1: Force brute avec deux boucles imbriquées.
+    Complexité: O(n^2)
+    """
     for i in range(len(nums)):
         for j in range(i + 1, len(nums)):
             if nums[i] + nums[j] == target:
                 return (i, j)
     return None
 
+
 def two_sum_sorted_optimized(nums: List[int], target: int) -> Optional[Tuple[int, int]]:
-    """Méthode 2: Optimisation pour une liste triée. O(n log n)."""
+    """
+    Méthode 2: Optimisation pour une liste triée.
+    Complexité: O(n log n)
+    """
     sorted_nums = sorted(nums)
     left, right = 0, len(sorted_nums) - 1
 
@@ -36,8 +44,12 @@ def two_sum_sorted_optimized(nums: List[int], target: int) -> Optional[Tuple[int
             right -= 1
     return None
 
+
 def two_sum_hash_map(nums: List[int], target: int) -> Optional[Tuple[int, int]]:
-    """Méthode 3: La solution la plus efficace, O(n)."""
+    """
+    Méthode 3: La solution la plus efficace, utilisant un dictionnaire (hash map).
+    Complexité: O(n)
+    """
     seen = {}
     for i, num in enumerate(nums):
         complement = target - num
@@ -46,79 +58,92 @@ def two_sum_hash_map(nums: List[int], target: int) -> Optional[Tuple[int, int]]:
         seen[num] = i
     return None
 
-# --- Fonctions utilitaires ---
 
-def run_single_test(args):
+# --- Fonctions utilitaires pour le test ---
+
+def worker_runner(func, nums, runs_per_test, shared_time, shared_status):
     """
-    Fonction enveloppe pour un test unique, destinée à être exécutée par le pool.
-    Renvoie le nom de la méthode, du jeu de données, et le temps d'exécution.
+    Exécute la fonction de test plusieurs fois et stocke le temps.
     """
-    impl_name, impl_func, dataset_name, dataset, target = args
-    start_time = time.time()
     try:
-        impl_func(dataset, target)
+        start_time = time.time()
+        for _ in range(runs_per_test):
+            target = nums[random.randint(0, len(nums) - 1)] + nums[random.randint(0, len(nums) - 1)]
+            func(nums, target)
         duration = time.time() - start_time
-        return (impl_name, dataset_name, 'success', duration)
-    except Exception as e:
-        return (impl_name, dataset_name, 'error', str(e))
+        shared_time.value = duration
+        shared_status.value = True  # Indique que l'exécution s'est terminée avec succès
+    except Exception:
+        shared_status.value = False  # Indique que l'exécution a échoué
+    finally:
+        sys.exit(0)
+
 
 def generate_dataset(size: int) -> List[int]:
     """Génère un ensemble de données de la taille spécifiée."""
-    return [random.randint(-10**9, 10**9) for _ in range(size)]
+    return [random.randint(-10 ** 9, 10 ** 9) for _ in range(size)]
 
-def generate_viable_target(nums: List[int]) -> int:
-    """Génère une cible valide en sélectionnant aléatoirement deux nombres."""
-    idx1, idx2 = random.sample(range(len(nums)), 2)
-    return nums[idx1] + nums[idx2]
 
-def run_performance_test_with_pool(
-    implementations: Dict[str, callable],
-    datasets: Dict[str, List[int]],
-    pool_size: int = 4
+def run_performance_test_stable(
+        implementations: Dict[str, callable],
+        datasets: Dict[str, List[int]],
+        runs_per_test: int = 1000,
+        timeout_seconds: int = 30
 ) -> None:
     """
-    Exécute les tests de performance en utilisant un pool de processus.
+    Exécute les tests de performance de manière stable en utilisant le multiprocessing.
     """
-    print("🚀 Début des tests de performance avec un pool de processus.")
+    print("🚀 Début des tests de performance avec timeout et répétitions (version stable).")
     print("-" * 70)
-    
+
     results = {}
-    tasks = []
 
-    # Créer la liste des tâches à exécuter par le pool
-    for dataset_name, dataset in datasets.items():
-        target = generate_viable_target(dataset)
-        for impl_name, impl_func in implementations.items():
-            # Ajout de chaque test au pool de tâches
-            tasks.append((impl_name, impl_func, dataset_name, dataset, target))
+    with multiprocessing.Manager() as manager:
+        for dataset_name, dataset in datasets.items():
+            print(f"📊 Données: {dataset_name} ({len(dataset)} éléments)")
 
-    # Utilisation d'un pool de processus
-    with multiprocessing.Pool(processes=pool_size) as pool:
-        # map_async envoie toutes les tâches en parallèle
-        async_result = pool.map_async(run_single_test, tasks)
-        
-        # Attendre la fin des tâches avec un affichage de progression
-        while not async_result.ready():
-            print(f"Progression... {len(tasks) - async_result._number_left} / {len(tasks)} tâches terminées.", end='\r')
-            time.sleep(1)
+            for impl_name, impl_func in implementations.items():
+                print(f"  -> Exécution de '{impl_name}'...", end="", flush=True)
 
-        print("\n✅ Toutes les tâches sont terminées.")
-        
-        # Récupérer les résultats
-        for impl_name, dataset_name, status, duration in async_result.get():
-            if status == 'success':
-                results[(dataset_name, impl_name)] = duration
-            else:
-                results[(dataset_name, impl_name)] = 'Erreur'
+                shared_time = manager.Value('d', -1.0)  # 'd' pour double
+                shared_status = manager.Value('b', False)  # 'b' pour bool (réussite)
+
+                # Lancer le test dans un processus séparé
+                p = multiprocessing.Process(
+                    target=worker_runner,
+                    args=(impl_func, dataset, runs_per_test, shared_time, shared_status)
+                )
+                p.start()
+
+                # Attendre la fin du processus avec un timeout
+                p.join(timeout=timeout_seconds)
+
+                if p.is_alive():
+                    # Si le processus est toujours vivant après le timeout, le tuer
+                    p.terminate()
+                    p.join()
+                    results[(dataset_name, impl_name)] = 'Timeout'
+                    print(f" Dépassé le temps limite de {timeout_seconds}s. (Non-polynômial)")
+                else:
+                    # Le processus s'est terminé, vérifier le statut
+                    if shared_status.value:
+                        duration = shared_time.value
+                        results[(dataset_name, impl_name)] = duration
+                        print(f" Terminé en {duration:.4f}s")
+                    else:
+                        results[(dataset_name, impl_name)] = 'Erreur'
+                        print(" Échec de l'exécution.")
+
+            print("-" * 70)
 
     # Affichage récapitulatif
-    print("\n🏆 Récapitulatif des performances")
+    print("🏆 Récapitulatif des performances")
     print("-" * 70)
-    
+
     header = f"{'Dataset':<15} | {'Naïve (n^2)':<25} | {'Optimisé (tri)':<25} | {'Dictionnaire (n)':<25}"
     print(header)
     print("-" * 70)
-    
+
     for dataset_name in datasets.keys():
         row = f"{dataset_name:<15} | "
         for impl_name in implementations.keys():
@@ -129,6 +154,7 @@ def run_performance_test_with_pool(
                 display_time = duration_or_status
             row += f"{display_time:<25} | "
         print(row.rstrip(' |'))
+
 
 # --- Exécution principale ---
 
@@ -144,10 +170,8 @@ if __name__ == "__main__":
         "5k": generate_dataset(5000),
         "25k": generate_dataset(25000),
         "125k": generate_dataset(125000),
-        "750k": generate_dataset(750000),
-        "1.5M": generate_dataset(1500000)
+        # Des jeux de données plus grands peuvent être ajoutés ici pour des tests intensifs
     }
     print("✅ Génération terminée.")
-    
-    # La taille du pool peut être ajustée ici
-    run_performance_test_with_pool(implementations, datasets, pool_size=4)
+
+    run_performance_test_stable(implementations, datasets, runs_per_test=100)
