@@ -3,7 +3,9 @@ import math
 import time
 import random
 import networkx as nx
+
 _single_source_dijkstra_cache = {}
+
 
 def load_graph_from_csv(nodes_file='nodes.csv', connections_file='connections.csv'):
     """
@@ -59,7 +61,6 @@ def find_shortest_path(graph, start_node, end_node):
         return {"distance": float('inf'), "path": []}
 
 
-import networkx as nx
 
 # Utiliser un dictionnaire global pour le cache
 _shortest_path_cache = {}
@@ -177,6 +178,7 @@ def main():
         print(f"Temps total d'exécution : {total_time:.4f} secondes")
         print(f"Temps moyen par calcul : {average_time:.6f} secondes")
         print("--------------------------------------------------")
+
 
 if __name__ == '__main__':
     main()
