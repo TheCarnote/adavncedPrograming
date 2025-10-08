@@ -79,6 +79,29 @@ def length_of_longest_substring_optimized_dict(s: str) -> int:
 
     return max_len
 
+def length_of_longest_substring_array(s: str) -> int:
+    """
+    Fenêtre glissante avec un tableau de 256 éléments (pour ASCII).
+    Plus rapide que le dict en pratique, même complexité O(n).
+    """
+    n = len(s)
+    if n == 0:
+        return 0
+
+    # Tableau pour stocker la dernière position de chaque caractère (ASCII 0-255)
+    last_seen = [-1] * 256
+    max_len = 0
+    start = 0
+
+    for end in range(n):
+        char_code = ord(s[end])
+        if last_seen[char_code] >= start:
+            start = last_seen[char_code] + 1
+        
+        last_seen[char_code] = end
+        max_len = max(max_len, end - start + 1)
+
+    return max_len
 
 # --- Fonctions utilitaires pour le test ---
 
@@ -114,7 +137,8 @@ def run_performance_test(implementations: Dict[str, callable], datasets: Dict[st
     print("🏆 Récapitulatif des performances")
     print("-" * 70)
 
-    header = f"{'Dataset':<15} | {'Naïve (n^3)':<20} | {'Set (n^2)':<20} | {'Dictionnaire (n)':<20}"
+    # header = f"{'Dataset':<15}  | {'Dictionnaire (n)':<20} | {'Tableau ASCII (n)':<20}"
+    header = f"{'Dataset':<15} | {'Naïve (n^3)':<20} | {'Set (n^2)':<20} | {'Dictionnaire (n)':<20} | {'Tableau ASCII (n)':<20}"
     print(header)
     print("-" * 70)
 
@@ -131,7 +155,8 @@ if __name__ == "__main__":
     implementations = {
         "Naïve (n^3)": length_of_longest_substring_naive,
         "Set (n^2)": length_of_longest_substring_optimized_no_dict,
-        "Dictionnaire (n)": length_of_longest_substring_optimized_dict
+        "Dictionnaire (n)": length_of_longest_substring_optimized_dict,
+        "Tableau ASCII (n)": length_of_longest_substring_array,
     }
 
     print("⏳ Génération des ensembles de données de test...")
