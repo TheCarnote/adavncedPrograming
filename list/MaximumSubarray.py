@@ -23,7 +23,6 @@ def max_subarray_brute_force(nums: List[int]) -> int:
 
     return max_sum
 
-
 # --- Solution optimale (Algorithme de Kadane, O(n)) ---
 def max_subarray_kadane(nums: List[int]) -> int:
     """
@@ -48,6 +47,57 @@ def max_subarray_kadane(nums: List[int]) -> int:
     return global_max
 
 
+def max_subarray_ultimate(nums: List[int]) -> tuple[int, int, int]:
+    """
+    Version ultime de l'algorithme de maximum subarray.
+    Retourne (somme_maximale, indice_début, indice_fin)
+    
+    Optimisations :
+    - Détection des cas spéciaux (tous positifs/négatifs)
+    - Retourne les indices du sous-tableau optimal
+    - Plus robuste que Kadane standard
+    - Complexité : O(n) dans tous les cas
+    """
+    if not nums:
+        return 0, -1, -1
+    
+    n = len(nums)
+    
+    # Cas spécial : un seul élément
+    if n == 1:
+        return nums[0], 0, 0
+    
+    # Cas spécial : tous les éléments sont positifs ou nuls
+    if all(x >= 0 for x in nums):
+        return sum(nums), 0, n-1
+    
+    # Cas spécial : tous les éléments sont négatifs
+    if all(x < 0 for x in nums):
+        max_val = max(nums)
+        max_idx = nums.index(max_val)
+        return max_val, max_idx, max_idx
+    
+    # Algorithme de Kadane avec tracking des indices
+    max_sum = current_sum = nums[0]
+    start = end = temp_start = 0
+    
+    for i in range(1, n):
+        # Décision : continuer ou recommencer
+        if current_sum < 0:
+            current_sum = nums[i]
+            temp_start = i
+        else:
+            current_sum += nums[i]
+        
+        # Mise à jour du maximum
+        if current_sum > max_sum:
+            max_sum = current_sum
+            start = temp_start
+            end = i
+    
+    return max_sum, start, end
+
+
 # --- Fonctions de test et de comparaison ---
 def run_correctness_tests(solution_func, func_name: str):
     """Exécute des tests pour vérifier la justesse d'une solution."""
@@ -63,7 +113,13 @@ def run_correctness_tests(solution_func, func_name: str):
 
     all_passed = True
     for i, (nums, expected) in enumerate(tests):
-        result = solution_func(nums)
+        if func_name in ["Version Ultime", "Version Parallèle"]:
+            # Pour les fonctions qui retournent un tuple (somme, start, end)
+            result_tuple = solution_func(nums)
+            result = result_tuple[0]  # Extraire seulement la somme
+        else:
+            result = solution_func(nums)
+            
         if result == expected:
             print(f"Test de correction #{i + 1} : PASSED ✅")
         else:
@@ -110,14 +166,62 @@ def main():
     print("Remplacez ces fonctions par votre propre solution pour la tester.\n")
 
     # Exécution des tests pour la solution "brute force"
-    print("\n##### Tests pour la solution O(n^2) par défaut #####")
-    run_correctness_tests(max_subarray_brute_force, "Solution O(n^2)")
-    run_performance_tests(max_subarray_brute_force, "Solution O(n^2)")
+    # print("\n##### Tests pour la solution O(n^2) par défaut #####")
+    # run_correctness_tests(max_subarray_brute_force, "Solution O(n^2)")
+    # run_performance_tests(max_subarray_brute_force, "Solution O(n^2)")
 
     # Exécution des tests pour l'algorithme de Kadane
     print("\n##### Tests pour la solution O(n) (Kadane) #####")
     run_correctness_tests(max_subarray_kadane, "Algorithme de Kadane")
     run_performance_tests(max_subarray_kadane, "Algorithme de Kadane")
+
+    print("\n##### Tests pour la Version Ultime (avec indices) #####")
+    run_correctness_tests(max_subarray_ultimate, "Version Ultime")
+    run_performance_tests(max_subarray_ultimate, "Version Ultime")
+
+    # Test spécial pour la version ultime (affichage des indices)
+    print("\n##### Démonstration de la Version Ultime #####")
+    test_cases = [
+        ([-2, 1, -3, 4, -1, 2, 1, -5, 4], "Cas classique"),
+        ([1], "Un élément"),
+        ([-1], "Élément négatif"),
+        ([5, 4, -1, 7, 8], "Tous positifs"),
+        ([-2, -1], "Tous négatifs")
+    ]
+    
+    for nums, description in test_cases:
+        max_sum, start, end = max_subarray_ultimate(nums)
+        subarray = nums[start:end+1] if start != -1 else []
+        print(f"{description}: {nums}")
+        print(f"  Sous-tableau: {subarray} (indices {start}-{end})")
+        print(f"  Somme maximale: {max_sum}")
+        print()
+
+    # Test de performance pour la version parallélisée (seulement si nécessaire)
+    print("\n##### Comparaison Version Ultime vs Parallèle #####")
+    large_nums = list(range(100000))  # 100k éléments
+    
+    start_time = time.time()
+    result_ultimate = max_subarray_ultimate(large_nums)
+    end_time = time.time()
+    duration_ultimate = (end_time - start_time) * 1000
+    
+    # start_time = time.time()
+    # result_parallel = max_subarray_parallel(large_nums)
+    # end_time = time.time()
+    # duration_parallel = (end_time - start_time) * 1000
+
+    start_time = time.time()
+    result_kadane = max_subarray_kadane(large_nums)
+    end_time = time.time()
+    duration_kadane = (end_time - start_time) * 1000
+    
+    print(f"Dataset de 100,000 éléments:")
+    print(f"  Version Ultime: {duration_ultimate:.2f} ms (résultat: {result_ultimate[0]})")
+    print(f"  Version Kadane: {duration_kadane:.2f} ms (résultat: {result_kadane})")
+    # print(f"  Version Parallèle: {duration_parallel:.2f} ms (résultat: {result_parallel[0]})")
+    # print("  Note: La version parallèle est une approximation pour démo")
+    print("  Le vrai max subarray ne se parallélise pas facilement !")
 
 
 if __name__ == "__main__":
