@@ -15,6 +15,17 @@ def two_sum(nums: List[int], target: int) -> Optional[List[int]]:
                 return sorted([i, j])
     return None
 
+def two_sum_v2(nums: List[int], target: int) -> Optional[List[int]]:
+    """
+    Version optimisée de la fonction two_sum utilisant un dictionnaire pour une complexité O(n).
+    """
+    seen = {}
+    for i, num in enumerate(nums):
+        complement = target - num
+        if complement in seen:
+            return sorted([seen[complement], i])
+        seen[num] = i
+    return None
 
 # --- Tests de Correction ---
 def run_correctness_tests():
@@ -29,7 +40,7 @@ def run_correctness_tests():
     ]
     all_passed = True
     for i, (nums, target, expected) in enumerate(tests):
-        result = two_sum(nums, target)
+        result = two_sum_v2(nums, target)
         # On trie le résultat pour éviter les problèmes d'ordre ([1, 2] vs [2, 1])
         if result is not None:
             result.sort()
@@ -66,7 +77,7 @@ def run_performance_tests():
     all_passed = True
     for i, (nums, target) in enumerate(performance_tests):
         start_time = time.time()
-        two_sum(nums, target)
+        two_sum_v2(nums, target)
         end_time = time.time()
         duration = (end_time - start_time) * 1000  # Conversion en millisecondes
 
@@ -87,6 +98,7 @@ def main():
 
     run_correctness_tests()
     run_performance_tests()
+    
 
 
 if __name__ == "__main__":
