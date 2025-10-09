@@ -143,7 +143,7 @@ def main():
         print("Erreur: Pas assez de nœuds pour calculer un chemin.")
         return
 
-    num_runs = 5000
+    num_runs = 20000
 
     # Liste des fonctions à tester avec un nom descriptif
     implementations = [

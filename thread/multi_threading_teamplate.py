@@ -23,7 +23,7 @@ def executer_multithreading_io():
     threads = []
     temps_debut = time.perf_counter()
 
-    for i in range(4):
+    for i in range(10):
         thread = threading.Thread(target=tache_io_bound, args=(i,))
         threads.append(thread)
         thread.start()

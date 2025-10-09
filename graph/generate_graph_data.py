@@ -45,8 +45,8 @@ def generate_graph_files(num_nodes, num_connections, coord_min, coord_max):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="Générateur de fichiers de graphe pour le problème du plus court chemin.")
-    parser.add_argument('-n', '--num_nodes', type=int, default=100, help="Nombre de nœuds à générer.")
-    parser.add_argument('-c', '--num_connections', type=int, default=200, help="Nombre de connexions à générer.")
+    parser.add_argument('-n', '--num_nodes', type=int, default=5000, help="Nombre de nœuds à générer.")
+    parser.add_argument('-c', '--num_connections', type=int, default=20000, help="Nombre de connexions à générer.")
     parser.add_argument('-min', '--coord_min', type=int, default=-1000, help="Coordonnée minimale.")
     parser.add_argument('-max', '--coord_max', type=int, default=1000, help="Coordonnée maximale.")
 
