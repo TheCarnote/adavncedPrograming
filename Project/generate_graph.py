@@ -442,6 +442,55 @@ def search_in_radius_X(G, ad_id, X, strategy='hybrid'):
 
 # ==================== INTERFACE INTERACTIVE ====================
 
+def select_heuristics():
+    """
+    Permet à l'utilisateur de sélectionner les heuristiques à tester
+    """
+    print("\n" + "="*80)
+    print("🎯 SÉLECTION DES HEURISTIQUES À TESTER")
+    print("="*80)
+    
+    available_heuristics = {
+        '1': ('naive', 'Naïve - Parcours exhaustif (O(N))'),
+        '2': ('bfs', 'BFS - Parcours par arêtes (O(E))'),
+        '3': ('dijkstra', 'Dijkstra - File de priorité (O(E log V))'),
+        '4': ('hybrid', 'Hybride - Choix automatique')
+    }
+    
+    print("\n📋 Heuristiques disponibles:")
+    for key, (name, description) in available_heuristics.items():
+        print(f"   {key}. {description}")
+    
+    print("\n💡 Vous pouvez sélectionner plusieurs heuristiques (ex: 1,2,4)")
+    print("   Ou appuyez sur Entrée pour tester TOUTES les heuristiques")
+    
+    selection = input("\n🔍 Votre sélection: ").strip()
+    
+    if not selection:
+        # Tester toutes les heuristiques
+        selected = list(available_heuristics.keys())
+        print(f"\n✅ Toutes les heuristiques seront testées")
+    else:
+        # Parser la sélection
+        selected = [s.strip() for s in selection.split(',')]
+        # Valider
+        selected = [s for s in selected if s in available_heuristics]
+        
+        if not selected:
+            print("⚠️  Sélection invalide, toutes les heuristiques seront testées")
+            selected = list(available_heuristics.keys())
+    
+    # Convertir en noms d'heuristiques
+    selected_heuristics = [(available_heuristics[s][0], available_heuristics[s][1]) 
+                           for s in selected]
+    
+    print(f"\n✅ Heuristiques sélectionnées:")
+    for name, description in selected_heuristics:
+        print(f"   • {description}")
+    
+    return selected_heuristics
+
+
 def interactive_search(G):
     """
     Interface interactive pour rechercher des nœuds dans un rayon X
@@ -455,6 +504,9 @@ def interactive_search(G):
     
     print(f"\n📋 {len(ad_nodes)} ads disponibles dans le graphe")
     print(f"   Exemples: {', '.join(ad_nodes[:5])}")
+    
+    # Sélectionner les heuristiques à tester
+    selected_heuristics = select_heuristics()
     
     while True:
         print("\n" + "-"*80)
@@ -483,33 +535,52 @@ def interactive_search(G):
             print("❌ Rayon invalide. Réessayez.")
             continue
         
-        # Demander la stratégie
-        print("\n🔧 Stratégies disponibles:")
-        print("   1. naive    - Parcours exhaustif (O(N)) - Toujours complet")
-        print("   2. bfs      - Parcours par arêtes (O(E)) - Rapide si X ≈ D")
-        print("   3. dijkstra - File de priorité (O(E log V)) - Explore par ordre de distance")
-        print("   4. hybrid   - Automatique (RECOMMANDÉ) - Choisit la meilleure stratégie")
-        strategy = input("Choisissez une stratégie (1-4): ").strip()
+        # Tester toutes les heuristiques sélectionnées
+        print(f"\n🔍 Test des {len(selected_heuristics)} heuristique(s) sélectionnée(s)...")
+        print("="*80)
         
-        strategy_map = {'1': 'naive', '2': 'bfs', '3': 'dijkstra', '4': 'hybrid'}
-        strategy = strategy_map.get(strategy, 'hybrid')
+        results = []
         
-        # Effectuer la recherche
-        print(f"\n🔍 Recherche en cours (stratégie: {strategy})...")
-        nodes_found, duration = search_in_radius_X(G, ad_id, X, strategy)
+        for strategy_name, strategy_description in selected_heuristics:
+            print(f"\n📍 Test de: {strategy_description}")
+            print("-"*80)
+            
+            nodes_found, duration = search_in_radius_X(G, ad_id, X, strategy_name)
+            
+            results.append({
+                'name': strategy_name,
+                'description': strategy_description,
+                'nodes_found': len(nodes_found),
+                'duration_ms': duration * 1000,
+                'nodes': nodes_found
+            })
+            
+            print(f"   ✅ Nœuds trouvés: {len(nodes_found)}")
+            print(f"   ⏱️  Temps: {duration*1000:.2f} ms")
         
-        # Afficher les résultats
-        print(f"\n✅ RÉSULTATS:")
-        print(f"   - Nœuds trouvés: {len(nodes_found)}")
-        print(f"   - Temps de calcul: {duration*1000:.2f} ms")
-        print(f"   - Ratio X/D: {X/ad_data['radius_D']:.2f}")
+        # Afficher le résumé comparatif
+        print("\n" + "="*80)
+        print("📊 RÉSUMÉ COMPARATIF")
+        print("="*80)
+        print(f"{'Heuristique':<30} {'Nœuds trouvés':<15} {'Temps (ms)':<15}")
+        print("-"*80)
         
-        if len(nodes_found) > 0:
-            print(f"\n   Top 10 nœuds les plus proches:")
-            for i, (node_id, dist) in enumerate(nodes_found[:10], 1):
+        for result in results:
+            print(f"{result['description']:<30} {result['nodes_found']:<15} {result['duration_ms']:<15.2f}")
+        
+        print("-"*80)
+        print(f"Ratio X/D: {X/ad_data['radius_D']:.2f}")
+        
+        # Afficher le top 10 du meilleur résultat (celui avec le plus de nœuds)
+        best_result = max(results, key=lambda x: x['nodes_found'])
+        
+        if best_result['nodes_found'] > 0:
+            print(f"\n🏆 Meilleure heuristique: {best_result['description']}")
+            print(f"   Top 10 nœuds les plus proches:")
+            for i, (node_id, dist) in enumerate(best_result['nodes'][:10], 1):
                 print(f"      {i:2d}. {node_id:15s} - Distance: {dist:.4f}")
         else:
-            print("   Aucun nœud trouvé dans ce rayon.")
+            print("\n   ⚠️  Aucune heuristique n'a trouvé de nœud dans ce rayon.")
 
 
 # ==================== FONCTION PRINCIPALE ====================
