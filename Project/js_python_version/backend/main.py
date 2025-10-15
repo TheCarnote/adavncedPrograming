@@ -82,12 +82,12 @@ async def upload_files(
         with open(ads_path, "wb") as buffer:
             shutil.copyfileobj(ads_file.file, buffer)
         
-        print(f"\n{'='*60}")
+        
         print(f"📁 FICHIERS UPLOADÉS")
-        print(f"{'='*60}")
+        
         print(f"✅ Nodes: {nodes_file.filename} → adsSim_data_nodes.csv")
         print(f"✅ Ads: {ads_file.filename} → queries_structured.csv")
-        print(f"{'='*60}\n")
+      
         
         return {
             "message": "Fichiers uploadés avec succès",
@@ -154,9 +154,9 @@ def search_in_radius(request: SearchRequest):
         if radius_D is None:
             raise HTTPException(status_code=400, detail=f"Rayon D non défini pour {request.ad_id}")
         
-        print(f"\n{'='*60}")
+        
         print(f"🔍 RECHERCHE DANS LE RAYON D")
-        print(f"{'='*60}")
+        
         print(f"Ad: {request.ad_id}")
         print(f"Rayon D: {radius_D:.6f}")
         print(f"Méthode: {request.method}")
@@ -171,7 +171,7 @@ def search_in_radius(request: SearchRequest):
         elapsed_time = time.time() - start_time
         
         print(f"\n✅ {len(nodes_found)} nœuds trouvés en {elapsed_time:.3f}s")
-        print(f"{'='*60}\n")
+      
         
         return {
             "ad_id": request.ad_id,

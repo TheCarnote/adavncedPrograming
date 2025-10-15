@@ -262,81 +262,81 @@ class GraphManager:
         
         return nodes_found
     
-    def _search_naive(self, ad_features, Y_vector, radius_X) -> List[str]:
-        """Recherche naïve (parcours complet)"""
-        nodes_found = []
+    # def _search_naive(self, ad_features, Y_vector, radius_X) -> List[str]:
+    #     """Recherche naïve (parcours complet)"""
+    #     nodes_found = []
         
-        for node_id, node_data in self.graph.nodes(data=True):
-            if node_data.get('node_type') != 'regular':
-                continue
+    #     for node_id, node_data in self.graph.nodes(data=True):
+    #         if node_data.get('node_type') != 'regular':
+    #             continue
             
-            node_features = node_data['features']
-            distance = compute_weighted_distance(ad_features, node_features, Y_vector)
+    #         node_features = node_data['features']
+    #         distance = compute_weighted_distance(ad_features, node_features, Y_vector)
             
-            if distance <= radius_X:
-                nodes_found.append(node_id)
+    #         if distance <= radius_X:
+    #             nodes_found.append(node_id)
         
-        return nodes_found
+    #     return nodes_found
     
-    def _search_bfs(self, ad_id, ad_features, Y_vector, radius_X) -> List[str]:
-        """Recherche BFS"""
-        nodes_found = []
-        visited = set()
-        queue = [ad_id]
-        visited.add(ad_id)
+    # def _search_bfs(self, ad_id, ad_features, Y_vector, radius_X) -> List[str]:
+    #     """Recherche BFS"""
+    #     nodes_found = []
+    #     visited = set()
+    #     queue = [ad_id]
+    #     visited.add(ad_id)
         
-        while queue:
-            current = queue.pop(0)
+    #     while queue:
+    #         current = queue.pop(0)
             
-            for neighbor in self.graph.neighbors(current):
-                if neighbor in visited:
-                    continue
+    #         for neighbor in self.graph.neighbors(current):
+    #             if neighbor in visited:
+    #                 continue
                 
-                visited.add(neighbor)
+    #             visited.add(neighbor)
                 
-                if self.graph.nodes[neighbor].get('node_type') != 'regular':
-                    continue
+    #             if self.graph.nodes[neighbor].get('node_type') != 'regular':
+    #                 continue
                 
-                neighbor_features = self.graph.nodes[neighbor]['features']
-                distance = compute_weighted_distance(ad_features, neighbor_features, Y_vector)
+    #             neighbor_features = self.graph.nodes[neighbor]['features']
+    #             distance = compute_weighted_distance(ad_features, neighbor_features, Y_vector)
                 
-                if distance <= radius_X:
-                    nodes_found.append(neighbor)
-                    queue.append(neighbor)
+    #             if distance <= radius_X:
+    #                 nodes_found.append(neighbor)
+    #                 queue.append(neighbor)
         
-        return nodes_found
+    #     return nodes_found
     
-    def _search_dijkstra(self, ad_id, ad_features, Y_vector, radius_X) -> List[str]:
-        """Recherche Dijkstra avec file de priorité"""
-        import heapq
+    # def _search_dijkstra(self, ad_id, ad_features, Y_vector, radius_X) -> List[str]:
+    #     """Recherche Dijkstra avec file de priorité"""
+    #     import heapq
         
-        nodes_found = []
-        visited = set()
-        heap = [(0, ad_id)]
+    #     nodes_found = []
+    #     visited = set()
+    #     heap = [(0, ad_id)]
         
-        while heap:
-            current_dist, current = heapq.heappop(heap)
+    #     while heap:
+    #         current_dist, current = heapq.heappop(heap)
             
-            if current in visited:
-                continue
+    #         if current in visited:
+    #             continue
             
-            visited.add(current)
+    #         visited.add(current)
             
-            for neighbor in self.graph.neighbors(current):
-                if neighbor in visited:
-                    continue
+    #         for neighbor in self.graph.neighbors(current):
+    #             if neighbor in visited:
+    #                 continue
                 
-                if self.graph.nodes[neighbor].get('node_type') != 'regular':
-                    continue
+    #             if self.graph.nodes[neighbor].get('node_type') != 'regular':
+    #                 continue
                 
-                neighbor_features = self.graph.nodes[neighbor]['features']
-                distance = compute_weighted_distance(ad_features, neighbor_features, Y_vector)
+    #             neighbor_features = self.graph.nodes[neighbor]['features']
+    #             distance = compute_weighted_distance(ad_features, neighbor_features, Y_vector)
                 
-                if distance <= radius_X:
-                    nodes_found.append(neighbor)
-                    heapq.heappush(heap, (distance, neighbor))
+    #             if distance <= radius_X:
+    #                 nodes_found.append(neighbor)
+    #                 heapq.heappush(heap, (distance, neighbor))
         
-        return nodes_found
+    #     return nodes_found
 
 
 # Singleton global
