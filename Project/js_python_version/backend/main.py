@@ -7,12 +7,21 @@ import os
 import time
 from typing import List
 from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.middleware.cors import CORSMiddleware  # AJOUTÉ
 from pydantic import BaseModel
 import uvicorn
 
 from graph_manager import graph_manager
 
 app = FastAPI(title="Advertising Graph API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:8000"],  # Port par défaut de Vite (frontend)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -27,7 +36,7 @@ async def upload_files(
     ads_file: UploadFile = File(...)
 ):
     """
-    Upload des fichiers CSV personnalisés (priorité sur les défauts).
+    Upload des fichiers CSV personnalisés
     """
     try:
         # Sauvegarder nodes
@@ -44,9 +53,9 @@ async def upload_files(
         graph_manager.nodes_file = nodes_path
         graph_manager.ads_file = ads_path
         
-        print(f"✅ Fichiers uploadés et prioritaires : {nodes_file.filename}, {ads_file.filename}")
+        print(f"✅ Fichiers uploadés : {nodes_file.filename}, {ads_file.filename}")
         
-        return {"message": f"Fichiers uploadés : {nodes_file.filename}, {ads_file.filename}. Ils seront utilisés en priorité."}
+        return {"message": f"Fichiers uploadés : {nodes_file.filename}, {ads_file.filename}."}
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur upload : {str(e)}")
@@ -93,6 +102,30 @@ def get_graph_data(fx: int = 0, fy: int = 1, fz: int = 2):
         return graph_manager.get_graph_data((fx, fy, fz))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Dans main.py, ajoutez après les autres endpoints
+
+@app.get("/ads-data")
+def get_ads_data():
+    """
+    Retourne les données des ads (Y_vector, D).
+    """
+    try:
+        if graph_manager.ads_data is None:
+            graph_manager.load_ads_data()
+        
+        # Si toujours None ou vide, retourner un objet vide au lieu d'erreur
+        if graph_manager.ads_data is None or not graph_manager.ads_data:
+            print("⚠️ Aucune donnée ads chargée, retour d'objet vide")
+            return {}
+        
+        return graph_manager.ads_data
+    except Exception as e:
+        print(f"❌ Erreur dans /ads-data: {e}")
+        # Retourner un objet vide au lieu de 500
+        return {}
+
+
 
 @app.post("/search")
 def search_in_radius(request: SearchRequest):

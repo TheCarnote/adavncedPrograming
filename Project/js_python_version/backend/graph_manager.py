@@ -42,7 +42,8 @@ class GraphManager:
             
             for _, row in ads_df.iterrows():
                 ad_id = row['point_A']
-                Y_vector = np.array([float(x) for x in row['Y_vector'].split(';')])
+                # CHANGÉ : Stocker comme liste (JSON serializable)
+                Y_vector = [float(x) for x in row['Y_vector'].split(';')]
                 D = row['D']
                 self.ads_data[ad_id] = {'Y_vector': Y_vector, 'D': D}
             
@@ -105,9 +106,9 @@ class GraphManager:
         if ad_id not in self.ads_data:
             raise Exception(f"Ad {ad_id} introuvable")
         
-        Y_vector = self.ads_data[ad_id]['Y_vector']
+        Y_vector = np.array(self.ads_data[ad_id]['Y_vector'])  
         radius_X = self.ads_data[ad_id]['D']
-        
+    
         if method == 'naive':
             nodes_found = search_naive(self.graph, node_id, Y_vector, radius_X)
         elif method == 'bfs':

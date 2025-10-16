@@ -150,6 +150,10 @@ def search_naive(G, start_node_id, Y_vector, radius_X):
         if node_data.get('node_type') != 'regular':
             continue
         
+        # AJOUTÉ : Exclure le node de départ
+        if node_id == start_node_id:
+            continue
+        
         nodes_checked += 1
         node_features = np.array(node_data['features'])
         distance = compute_weighted_distance(start_features, node_features, Y_vector)
@@ -189,6 +193,10 @@ def search_bfs(G, start_node_id, Y_vector, radius_X):
             
             # Vérifier si c'est un nœud régulier
             if G.nodes[neighbor].get('node_type') != 'regular':
+                continue
+            
+            # AJOUTÉ : Exclure le node de départ
+            if neighbor == start_node_id:
                 continue
             
             nodes_checked += 1
@@ -236,6 +244,10 @@ def search_dijkstra(G, start_node_id, Y_vector, radius_X):
             
             # Vérifier si c'est un nœud régulier
             if G.nodes[neighbor].get('node_type') != 'regular':
+                continue
+            
+            # AJOUTÉ : Exclure le node de départ
+            if neighbor == start_node_id:
                 continue
             
             nodes_checked += 1
