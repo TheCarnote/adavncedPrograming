@@ -9,7 +9,7 @@ import './App.css';
 function App() {
   const [graphData, setGraphData] = useState(null);
   const [stats, setStats] = useState(null);
-  const [selectedAd, setSelectedAd] = useState(null);
+  const [selectedNode, setSelectedNode] = useState(null);  // CHANGÉ selectedAd -> selectedNode
   const [searchResults, setSearchResults] = useState([]);
   const [highlightedNodes, setHighlightedNodes] = useState([]);
   const [highlightedLinks, setHighlightedLinks] = useState([]);
@@ -25,7 +25,7 @@ function App() {
     setLogs(prev => [...prev, { time, message, type }]);
   };
 
-  // Uploader les fichiers CSV
+  // Uploader les fichiers CSV (handler passé à ControlPanel)
   const handleUploadFiles = async (nodesFile, adsFile) => {
     setIsLoading(true);
     setLoadingMessage('Upload des fichiers CSV...');
@@ -34,18 +34,15 @@ function App() {
     try {
       const response = await graphAPI.uploadFiles(nodesFile, adsFile);
       addLog(response.message, 'success');
-      addLog(`✅ Nodes: ${response.nodes_file} → ${response.nodes_path}`, 'info');
-      addLog(`✅ Ads: ${response.ads_file} → ${response.ads_path}`, 'info');
     } catch (error) {
-      console.error('❌ Erreur:', error);
-      addLog(`❌ Erreur: ${error.response?.data?.detail || error.message}`, 'error');
+      addLog(`❌ Erreur: ${error.message}`, 'error');
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
     }
   };
 
-  // Construire le graphe
+  // Construire le graphe (handler passé à ControlPanel)
   const handleBuildGraph = async (k) => {
     setIsLoading(true);
     setLoadingMessage(`Construction du graphe avec K=${k}...`);
@@ -53,66 +50,30 @@ function App() {
 
     try {
       const response = await graphAPI.buildGraph(k);
-      addLog(response.message, 'success');
-
-      // Afficher les temps
-      if (response.stats && response.stats.build_time) {
-        addLog(`⏱️  Temps total: ${response.stats.build_time.toFixed(2)}s`, 'success');
-
-        if (response.stats.load_time) {
-          addLog(`   📂 Chargement CSV: ${response.stats.load_time.toFixed(2)}s`, 'info');
-        }
-        if (response.stats.construction_time) {
-          addLog(`   🏗️  Construction K-NN: ${response.stats.construction_time.toFixed(2)}s`, 'info');
-        }
-        if (response.stats.save_time) {
-          addLog(`   💾 Sauvegarde: ${response.stats.save_time.toFixed(2)}s`, 'info');
-        }
-      }
-
-      addLog(`📊 ${response.stats.total_nodes} nœuds, ${response.stats.total_edges} arêtes`, 'info');
-
-      // Afficher les listes de nœuds et arêtes
-      if (response.nodes && response.edges) {
-        addLog(`\n📋 LISTE DES NŒUDS (${response.nodes.length}):`, 'info');
-
-        // Formatter la liste des nœuds
-        const nodesList = response.nodes.map(n => {
-          if (n.type === 'ad') {
-            return `  • ${n.id} [AD, D=${n.radius_D?.toFixed(4)}]`;
-          }
-          return `  • ${n.id} [Node]`;
-        }).join('\n');
-
-        addLog(nodesList, 'code');
-
-        addLog(`\n🔗 LISTE DES ARÊTES (${response.edges.length}):`, 'info');
-
-        // Afficher un échantillon des arêtes (premières 20)
-        const edgesSample = response.edges.slice(0, 20).map(e =>
-          `  • ${e.source} → ${e.target} [weight: ${e.weight.toFixed(4)}]`
-        ).join('\n');
-
-        addLog(edgesSample, 'code');
-
-        if (response.edges.length > 20) {
-          addLog(`  ... et ${response.edges.length - 20} autres arêtes`, 'info');
-        }
-
-        // Logger dans la console pour copier facilement
-        console.log('📋 NŒUDS COMPLETS:', response.nodes);
-        console.log('🔗 ARÊTES COMPLÈTES:', response.edges);
-      }
-
-      setStats(response.stats);
-
-      // Charger les données pour la visualisation
-      setLoadingMessage('Chargement de la visualisation 3D...');
+      addLog(`✅ Graphe construit: ${response.total_nodes} nodes`, 'success');
+      setStats(response);
       await loadGraphData(currentFeatures);
-
     } catch (error) {
-      console.error('❌ Erreur:', error);
-      addLog(`❌ Erreur: ${error.response?.data?.detail || error.message}`, 'error');
+      addLog(`❌ Erreur: ${error.message}`, 'error');
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
+    }
+  };
+
+  // Charger le graphe (handler passé à ControlPanel)
+  const handleLoadGraph = async () => {
+    setIsLoading(true);
+    setLoadingMessage('Chargement du graphe...');
+    addLog('📂 Chargement du graphe...', 'step');
+
+    try {
+      const response = await graphAPI.loadGraph();
+      addLog(`✅ Graphe chargé: ${response.total_nodes} nodes`, 'success');
+      setStats(response);
+      await loadGraphData(currentFeatures);
+    } catch (error) {
+      addLog(`❌ Erreur: ${error.message}`, 'error');
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
@@ -121,99 +82,53 @@ function App() {
 
   // Charger les données du graphe pour la visualisation
   const loadGraphData = async (featureIndices) => {
-    addLog(`🎨 Chargement de la vue 3D (features ${featureIndices.map(i => i + 1).join(', ')})...`, 'info');
-
+    addLog(`🎨 Chargement de la vue 3D...`, 'info');
     try {
-      const data = await graphAPI.getGraphData(featureIndices);
+      const data = await graphAPI.fetchGraphData(featureIndices);
       setGraphData(data);
-      addLog(`✅ ${data.nodes.length} nœuds et ${data.links.length} arêtes chargés`, 'success');
+      addLog(`✅ ${data.nodes.length} nœuds chargés`, 'success');
     } catch (error) {
-      addLog(`❌ Erreur de chargement: ${error.message}`, 'error');
+      addLog(`❌ Erreur: ${error.message}`, 'error');
     }
   };
 
-  // Régénérer la vue 3D
-  const handleRegenerateView = async (featureIndices) => {
-    setCurrentFeatures(featureIndices);
-    setSearchResults([]);
-    setSelectedAd(null);
-    setHighlightedNodes([]);
-    setHighlightedLinks([]);
-    await loadGraphData(featureIndices);
-  };
-
-  // Rechercher dans le rayon D
-  const handleSearch = async (adId, method = 'hybrid') => {
+  // Rechercher dans le rayon D (handler passé à ControlPanel)
+  const handleSearch = async (nodeId, adId, method) => {
     setIsLoading(true);
-    setLoadingMessage(`Analyse du rayon D pour ${adId}...`);
-    addLog(`🎯 Analyse du rayon D pour ${adId}`, 'step');
+    setLoadingMessage(`Recherche depuis ${nodeId} avec ad ${adId}...`);
+    addLog(`🎯 Recherche depuis ${nodeId} avec ad ${adId}`, 'step');
 
     try {
-      const response = await graphAPI.search(adId, method);
-
-      setSelectedAd(adId);
+      const response = await graphAPI.searchInRadius(nodeId, adId, method);
+      setSelectedNode(nodeId);  // CHANGÉ selectedAd -> selectedNode
       setSearchResults(response.nodes_found);
-      setHighlightedNodes([]);
-      setHighlightedLinks([]);
-
-      addLog(`✅ ${response.nodes_found.length} nœuds trouvés dans le rayon D`, 'success');
-      addLog(`📏 Rayon D utilisé: ${response.radius_D.toFixed(6)}`, 'info');
-      addLog(`⏱️  Temps d'analyse: ${response.elapsed_time.toFixed(3)}s`, 'info');
-      addLog(`📈 Méthode: ${response.method_used}`, 'info');
-
-      // Formater la liste Python
-      const formatPythonList = (nodes) => {
-        if (nodes.length === 0) return '[]';
-        if (nodes.length <= 5) {
-          return `['${nodes.join("', '")}']`;
-        }
-        if (nodes.length <= 50) {
-          const formatted = nodes.map(node => `'${node}'`).join(', ');
-          return `[${formatted}]`;
-        }
-        const formatted = nodes.map(node => `    '${node}'`).join(',\n');
-        return `[\n${formatted}\n]`;
-      };
-
-      const pythonList = formatPythonList(response.nodes_found);
-      addLog(`📋 Liste complète des ${response.nodes_found.length} nœuds (format Python):`, 'info');
-      addLog(pythonList, 'code');
-
-      console.log('📋 Liste complète des nœuds (format Python):');
-      console.log(pythonList);
-      console.log('\n🔢 Tableau JavaScript:');
-      console.log(response.nodes_found);
-
+      addLog(`✅ ${response.total_nodes} nodes trouvés`, 'success');
     } catch (error) {
-      addLog(`❌ Erreur: ${error.response?.data?.detail || error.message}`, 'error');
+      addLog(`❌ Erreur: ${error.message}`, 'error');
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
     }
   };
 
-  // Désélectionner l'ad
-  const handleClearSelection = () => {
-    setSelectedAd(null);
-    setSearchResults([]);
-    setHighlightedNodes([]);
-    setHighlightedLinks([]);
-    addLog('🔄 Sélection réinitialisée', 'info');
+  // Rafraîchir la visualisation (handler passé à ControlPanel)
+  const handleGraphDataChange = async () => {
+    await loadGraphData(currentFeatures);
   };
 
   // Clic sur un nœud
   const handleNodeClick = (node) => {
-    if (!node || !node.id) {
-      console.error('Node invalide:', node);
-      return;
-    }
-
     addLog(`👆 Nœud cliqué: ${node.id}`, 'info');
-
-    if (node.type === 'ad') {
-      handleSearch(node.id);
-    }
+    // Pas de recherche auto sur clic, car on choisit manuellement
   };
+
+  const clearSearch = () => {
+    setSelectedNode(null);
+    setSearchResults([]);
+    setHighlightedNodes([]);
+    setHighlightedLinks([]);
+
+  }
 
   return (
     <div className="app">
@@ -225,7 +140,7 @@ function App() {
         <div className="header-info">
           {stats && (
             <span className="badge">
-              {stats.total_nodes} nœuds • {stats.ad_nodes} ads
+              {stats.total_nodes} nœuds
             </span>
           )}
           {searchResults.length > 0 && (
@@ -242,14 +157,16 @@ function App() {
         <aside className="sidebar">
           <ControlPanel
             stats={stats}
-            graphData={graphData}
-            selectedAd={selectedAd}
+            clearSearch={clearSearch}
+            nodesData={graphData ? graphData.nodes : []}
+            selectedNode={selectedNode}
             searchResults={searchResults}
             onUploadFiles={handleUploadFiles}
             onBuildGraph={handleBuildGraph}
-            onRegenerateView={handleRegenerateView}
+            onLoadGraph={handleLoadGraph}
             onSearch={handleSearch}
-            onClearSelection={handleClearSelection}
+            onGraphDataChange={handleGraphDataChange}
+            onLog={addLog}
             isLoading={isLoading}
           />
         </aside>
@@ -258,7 +175,7 @@ function App() {
         <main className="main-viewer">
           <GraphViewer3D
             graphData={graphData}
-            selectedAd={selectedAd}
+            selectedNode={selectedNode}  // CHANGÉ selectedAd -> selectedNode
             searchResults={searchResults}
             highlightedNodes={highlightedNodes}
             highlightedLinks={highlightedLinks}

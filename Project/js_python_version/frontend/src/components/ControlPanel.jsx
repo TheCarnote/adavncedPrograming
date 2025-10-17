@@ -1,340 +1,189 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
+import graphAPI from '../api/graphAPI';
 import './ControlPanel.css';
 
 const ControlPanel = ({
     stats,
-    graphData,
-    selectedAd,
-    searchResults,
+    clearSearch,
+    nodesData,
     onUploadFiles,
     onBuildGraph,
-    onRegenerateView,
+    onLoadGraph,
     onSearch,
-    onClearSelection,
+    onGraphDataChange,
+    onLog,
     isLoading
 }) => {
-    const [kValue, setKValue] = useState(10);
-    const [featureX, setFeatureX] = useState(0);
-    const [featureY, setFeatureY] = useState(1);
-    const [featureZ, setFeatureZ] = useState(2);
-    const [localSelectedAd, setLocalSelectedAd] = useState('');
-    const [defaultD, setDefaultD] = useState(null);
+    const [k, setK] = useState(10);
+    const [searchNodeId, setSearchNodeId] = useState('');
+    const [searchAdId, setSearchAdId] = useState('');
+    const [searchMethod, setSearchMethod] = useState('hybrid');
+    const [adsData, setAdsData] = useState({});
+    const [selectedAdYVector, setSelectedAdYVector] = useState(null);
+
+    // États pour l'upload
     const [nodesFile, setNodesFile] = useState(null);
     const [adsFile, setAdsFile] = useState(null);
 
-    const nodesFileInputRef = useRef(null);
-    const adsFileInputRef = useRef(null);
+    const loadAdsData = async () => {
+        try {
+            const ads = await graphAPI.fetchAdsData();
+            setAdsData(ads);
+            // onLog('Ads chargées');
+        } catch (error) {
+            onLog(`Erreur: ${error.message}`);
+        }
+    };
 
-    const numFeatures = stats?.num_features || 50;
-    const ads = stats?.ads || [];
-
-    // Synchroniser la sélection externe avec la sélection locale
-    useEffect(() => {
-        if (selectedAd) {
-            setLocalSelectedAd(selectedAd);
+    // Gestionnaire pour la sélection d'ad : afficher Y_vector
+    const handleAdChange = (adId) => {
+        setSearchAdId(adId);
+        if (adsData[adId]) {
+            setSelectedAdYVector(adsData[adId].Y_vector);
         } else {
-            setLocalSelectedAd('');
-        }
-    }, [selectedAd]);
-
-    // Mettre à jour le D par défaut quand un ad est sélectionné
-    useEffect(() => {
-        if (localSelectedAd && graphData && graphData.nodes) {
-            const adNode = graphData.nodes.find(n => n.id === localSelectedAd);
-            if (adNode && adNode.radius_D !== undefined) {
-                setDefaultD(adNode.radius_D);
-            } else {
-                setDefaultD(null);
-            }
-        } else {
-            setDefaultD(null);
-        }
-    }, [localSelectedAd, graphData]);
-
-    // Lancer la recherche automatiquement quand un ad est sélectionné
-    const handleAdSelection = (adId) => {
-        setLocalSelectedAd(adId);
-        if (adId && graphData) {
-            onSearch(adId, 'hybrid');
+            setSelectedAdYVector(null);
         }
     };
 
-    const handleClearSelection = () => {
-        setLocalSelectedAd('');
-        setDefaultD(null);
-        if (onClearSelection) {
-            onClearSelection();
-        }
-    };
-
-    // Gestion des fichiers
-    const handleNodesFileChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            setNodesFile(file);
-        }
-    };
-
-    const handleAdsFileChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            setAdsFile(file);
-        }
-    };
-
-    const handleUploadFiles = () => {
+    // Upload des fichiers (utilise la prop)
+    const handleUploadFiles = async () => {
         if (!nodesFile || !adsFile) {
-            alert('⚠️ Veuillez sélectionner les deux fichiers CSV (Nodes et Ads)');
+            onLog('Sélectionnez les deux fichiers');
             return;
         }
-
-        onUploadFiles(nodesFile, adsFile);
+        try {
+            onLog('Upload des fichiers...');
+            await onUploadFiles(nodesFile, adsFile);
+            await loadAdsData();  // Recharger après upload
+            setNodesFile(null);
+            setAdsFile(null);
+        } catch (error) {
+            onLog(`Erreur: ${error.message}`);
+        }
     };
+
+    // Construire le graphe (utilise la prop)
+    const handleBuildGraph = async () => {
+        await onBuildGraph(k);
+        await loadAdsData();
+        onGraphDataChange();
+    };
+
+    // Charger le graphe (utilise la prop)
+    const handleLoadGraph = async () => {
+        await onLoadGraph();
+        await loadAdsData();
+        onGraphDataChange();
+    };
+
+    // Rechercher (utilise la prop)
+    const handleSearch = async () => {
+        if (!searchNodeId || !searchAdId) {
+            onLog('Sélectionnez un node et un ad');
+            return;
+        }
+        await onSearch(searchNodeId, searchAdId, searchMethod);
+    };
+
+    useEffect(() => {
+        // Clear search section when nodes data changes
+        setSearchNodeId('');
+        setSearchAdId('');
+        setSelectedAdYVector(null);
+    }, [nodesData]);
+
+    useEffect(() => {
+        // Clear search section when ads data changes
+        setSearchNodeId('');
+        setSearchAdId('');
+        setSelectedAdYVector(null);
+    }, [adsData]);
 
     return (
         <div className="control-panel">
-            <div className="control-header">
-                <h2>Panneau de Contrôle</h2>
-                {selectedAd && (
-                    <button
-                        onClick={handleClearSelection}
-                        className="btn btn-warning btn-clear-global"
-                        disabled={isLoading}
-                        title="Désélectionner l'ad actuel"
-                    >
-                        ❌ Désélectionner
-                    </button>
-                )}
-            </div>
+            <h2>Contrôles</h2>
 
-            {/* Bannière de l'ad sélectionné */}
-            {selectedAd && (
-                <div className="selected-ad-banner">
-                    <span className="selected-label">Ad sélectionné:</span>
-                    <strong className="selected-id">{selectedAd}</strong>
-                    {defaultD !== null && (
-                        <span className="selected-info">D = {defaultD.toFixed(4)}</span>
-                    )}
-                </div>
-            )}
-
-            {/* Section Upload des fichiers CSV */}
-            <div className="section section-upload">
-                <h3>📁 Charger les fichiers CSV</h3>
-
-                <p className="section-description">
-                    Uploadez vos fichiers CSV pour construire un nouveau graphe personnalisé.
-                </p>
-
-                <div className="input-group">
-                    <label>Fichier Nodes (nœuds réguliers):</label>
-                    <input
-                        ref={nodesFileInputRef}
-                        type="file"
-                        accept=".csv"
-                        onChange={handleNodesFileChange}
-                        disabled={isLoading}
-                        style={{ display: 'none' }}
-                    />
-                    <button
-                        onClick={() => nodesFileInputRef.current?.click()}
-                        className="btn btn-file"
-                        disabled={isLoading}
-                    >
-                        {nodesFile ? `✅ ${nodesFile.name}` : '📄 Choisir fichier Nodes'}
-                    </button>
-                </div>
-
-                <div className="input-group">
-                    <label>Fichier Ads (annonces):</label>
-                    <input
-                        ref={adsFileInputRef}
-                        type="file"
-                        accept=".csv"
-                        onChange={handleAdsFileChange}
-                        disabled={isLoading}
-                        style={{ display: 'none' }}
-                    />
-                    <button
-                        onClick={() => adsFileInputRef.current?.click()}
-                        className="btn btn-file"
-                        disabled={isLoading}
-                    >
-                        {adsFile ? `✅ ${adsFile.name}` : '📄 Choisir fichier Ads'}
-                    </button>
-                </div>
-
-                <button
-                    onClick={handleUploadFiles}
-                    className="btn btn-success"
-                    disabled={isLoading || !nodesFile || !adsFile}
-                >
-                    {isLoading ? '⏳ Upload...' : '📤 Uploader les fichiers'}
-                </button>
-            </div>
-
-            {/* Section Construction */}
+            {/* Upload de fichiers */}
             <div className="section">
-                <h3>📊 Construction du Graphe</h3>
-
-                <div className="input-group">
-                    <label>Nombre de voisins K-NN:</label>
-                    <input
-                        type="number"
-                        value={kValue}
-                        onChange={(e) => setKValue(parseInt(e.target.value) || 10)}
-                        min="1"
-                        max="50"
-                        disabled={isLoading}
-                    />
-                </div>
-
-                <button
-                    onClick={() => onBuildGraph(kValue)}
-                    disabled={isLoading}
-                    className="btn btn-primary"
-                >
-                    {isLoading ? '⏳ Construction...' : '🔨 Construire le graphe'}
-                </button>
+                <h3>Upload Fichiers</h3>
+                <label>
+                    Fichier Nodes (CSV):
+                    <input type="file" accept=".csv" onChange={(e) => setNodesFile(e.target.files[0])} disabled={isLoading} />  {/*AJOUTÉ : disabled={isLoading} */}
+                </label>
+                <label>
+                    Fichier Ads (CSV):
+                    <input type="file" accept=".csv" onChange={(e) => setAdsFile(e.target.files[0])} disabled={isLoading} />   {/* AJOUTÉ : disabled={isLoading} */}
+                </label>
+                <button onClick={handleUploadFiles} disabled={isLoading}>Uploader Fichiers</button>
             </div>
 
-            {/* Section Statistiques */}
-            {stats && (
-                <div className="section stats">
-                    <h3>📈 Statistiques</h3>
-                    <div className="stat-item">
-                        <span>Nœuds totaux:</span>
-                        <strong>{stats.total_nodes}</strong>
-                    </div>
-                    <div className="stat-item">
-                        <span>Arêtes:</span>
-                        <strong>{stats.total_edges}</strong>
-                    </div>
-                    <div className="stat-item">
-                        <span>Ads:</span>
-                        <strong>{stats.ad_nodes}</strong>
-                    </div>
-                    <div className="stat-item">
-                        <span>Features:</span>
-                        <strong>{stats.num_features}</strong>
-                    </div>
-                    {stats.build_time && (
-                        <div className="stat-item highlight">
-                            <span>⏱️ Temps construction:</span>
-                            <strong>{stats.build_time.toFixed(2)}s</strong>
-                        </div>
-                    )}
+            {/* Build/Load */}
+            <div className="section">
+                <label>K-NN: <input type="number" value={k} onChange={(e) => setK(e.target.value)} /></label>
+                <button onClick={handleBuildGraph} disabled={isLoading}>Construire Graphe</button>
+                {/* <button onClick={handleLoadGraph} disabled={isLoading}>Charger Graphe</button> */}
+            </div>
+
+            {/* Sélection pour recherche */}
+            <div className="section">
+                <div style={{ display: 'flex', marginBottom: '10px', }}>
+                    <h3 style={{ 'width': 'fit-content', margin: 0 }}>Recherche</h3>
+                    <div className='spacer'></div>
+                    <button onClick={() => {
+                        setSearchNodeId('');
+                        setSearchAdId('');
+                        setSelectedAdYVector(null);
+                        clearSearch();
+                    }}>Réinitialiser</button>
                 </div>
-            )}
+                <label>
+                    Node de départ:
+                    <select value={searchNodeId} onChange={(e) => setSearchNodeId(e.target.value)}>
+                        <option value="">-- Choisir --</option>
+                        {nodesData && nodesData.length > 0 && nodesData.map(node => (
+                            <option key={node.id} value={node.id}>{node.id}</option>
+                        ))}
+                    </select>
+                </label>
 
-            {/* Section Visualisation */}
+                <label>
+                    Ad:
+                    <select value={searchAdId} onChange={(e) => handleAdChange(e.target.value)}>
+                        <option value="">-- Choisir --</option>
+                        {Object.keys(adsData).map(id => (
+                            <option key={id} value={id}>{id}</option>
+                        ))}
+                    </select>
+                </label>
+
+                {/* Affichage du Y_vector de l'ad sélectionné */}
+                {selectedAdYVector && (
+                    <div className="ad-info">
+                        <h4>Y_vector de {searchAdId}:</h4>
+                        <p style={{ 'wordBreak': 'break-all' }}>{JSON.stringify(selectedAdYVector)}</p>
+                    </div>
+                )}
+
+                <label>
+                    Méthode:
+                    <select value={searchMethod} onChange={(e) => setSearchMethod(e.target.value)}>
+                        <option value="naive">Naive</option>
+                        <option value="bfs">BFS</option>
+                        <option value="dijkstra">Dijkstra</option>
+                        <option value="hybrid">Hybrid</option>
+                    </select>
+                </label>
+
+                <button onClick={handleSearch} disabled={isLoading}>Rechercher</button>
+            </div>
+
+            {/* Stats */}
             {stats && (
-                <div className="section">
-                    <h3>🎨 Visualisation 3D</h3>
-
-                    <div className="input-group">
-                        <label>Feature X (axe horizontal):</label>
-                        <select
-                            value={featureX}
-                            onChange={(e) => setFeatureX(parseInt(e.target.value))}
-                        >
-                            {[...Array(numFeatures)].map((_, i) => (
-                                <option key={i} value={i}>Feature {i + 1}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="input-group">
-                        <label>Feature Y (axe vertical):</label>
-                        <select
-                            value={featureY}
-                            onChange={(e) => setFeatureY(parseInt(e.target.value))}
-                        >
-                            {[...Array(numFeatures)].map((_, i) => (
-                                <option key={i} value={i}>Feature {i + 1}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="input-group">
-                        <label>Feature Z (profondeur):</label>
-                        <select
-                            value={featureZ}
-                            onChange={(e) => setFeatureZ(parseInt(e.target.value))}
-                        >
-                            {[...Array(numFeatures)].map((_, i) => (
-                                <option key={i} value={i}>Feature {i + 1}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <button
-                        onClick={() => onRegenerateView([featureX, featureY, featureZ])}
-                        className="btn btn-primary"
-                        disabled={isLoading}
-                    >
-                        🔄 Régénérer la vue 3D
-                    </button>
-                </div>
-            )}
-
-            {/* Section Analyse du Rayon D */}
-            {stats && ads.length > 0 && (
-                <div className="section section-search">
-                    <h3>🎯 Analyse du Rayon D</h3>
-
-                    <p className="section-description">
-                        Sélectionnez un ad pour afficher automatiquement tous les nœuds dans son rayon D.
-                    </p>
-
-                    <div className="input-group">
-                        <label>Sélectionner un Ad:</label>
-                        <select
-                            value={localSelectedAd}
-                            onChange={(e) => handleAdSelection(e.target.value)}
-                            disabled={isLoading}
-                        >
-                            <option value="">-- Choisir un ad --</option>
-                            {ads.map(ad => (
-                                <option key={ad} value={ad}>{ad}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {defaultD !== null && (
-                        <div className="info-box-large">
-                            <div className="info-row">
-                                <span className="info-label">📏 Rayon D:</span>
-                                <strong className="info-value">{defaultD.toFixed(4)}</strong>
-                            </div>
-                            <div className="info-description">
-                                Ce rayon D est utilisé automatiquement pour la recherche.
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Liste des nœuds trouvés */}
-                    {searchResults && searchResults.length > 0 && (
-                        <div className="results-container">
-                            <div className="results-header">
-                                <h4>📋 Nœuds dans le rayon D</h4>
-                                <span className="results-count">{searchResults.length} nœuds</span>
-                            </div>
-                            <div className="results-list">
-                                {searchResults.slice(0, 20).map((nodeId, index) => (
-                                    <div key={nodeId} className="result-item">
-                                        <span className="result-number">{index + 1}</span>
-                                        <span className="result-id">{nodeId}</span>
-                                    </div>
-                                ))}
-                                {searchResults.length > 20 && (
-                                    <div className="result-item result-more">
-                                        <span>... et {searchResults.length - 20} autres nœuds</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                <div className="stats">
+                    <h3>Stats</h3>
+                    <p>Nodes: {stats.total_nodes}</p>
+                    <p>Arêtes: {stats.total_edges}</p>
+                    <p>Ads: {Object.keys(adsData).length}</p>
                 </div>
             )}
         </div>

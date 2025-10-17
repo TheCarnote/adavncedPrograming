@@ -139,3 +139,7 @@ body {
     opacity: 0.9;
   }
 }
+
+.spacer {
+  flex: 1;
+}
