@@ -9,121 +9,79 @@ import time
 from typing import Dict, List, Tuple, Optional
 import networkx as nx
 import numpy as np
-import pandas as pd
 
-from generate_graph import search_naive, search_bfs, search_dijkstra, search_hybrid, compute_weighted_distance
+from generate_graph import (
+    load_data,
+    build_graph,
+    compute_weighted_distance
+)
+
 
 class GraphManager:
+    """Gestionnaire singleton du graphe"""
+    
     def __init__(self):
-        self.graph = None
-        self.ads_data = None
-        self.graph_path = os.path.join(os.path.dirname(__file__), "advertising_graph.pkl")
-        # Chemins des fichiers : par défaut les CSV existants
-        self.nodes_file = 'adsSim_data_nodes.csv'
-        self.ads_file = 'queries_structured.csv'
+        self.graph: Optional[nx.Graph] = None
+        self.build_time: Optional[float] = None
+        
+        # Chemin vers le fichier pickle (dossier backend)
+        self.backend_dir = os.path.dirname(os.path.abspath(__file__))
+        self.graph_path = os.path.join(self.backend_dir, "advertising_graph.pkl")
+        
+        print(f" GraphManager initialisé")
+        print(f"   Répertoire backend: {self.backend_dir}")
+        print(f"   Chemin graphe: {self.graph_path}")
     
-    def load_ads_data(self, ads_file: str = None):
-        """
-        Charge les données des ads depuis le CSV.
-        """
-        if ads_file is None:
-            ads_file = self.ads_file
-        
-        self.ads_data = {}
-        try:
-            if not os.path.exists(ads_file):
-                print(f"⚠️  Fichier ads introuvable: {ads_file}. Utilisez /upload-files pour uploader.")
-                return
-            
-            ads_df = pd.read_csv(ads_file)
-            if ads_df.empty:
-                print(f"⚠️  Fichier ads vide: {ads_file}")
-                return
-            
-            for _, row in ads_df.iterrows():
-                ad_id = row['point_A']
-                # CHANGÉ : Stocker comme liste (JSON serializable)
-                Y_vector = [float(x) for x in row['Y_vector'].split(';')]
-                D = row['D']
-                self.ads_data[ad_id] = {'Y_vector': Y_vector, 'D': D}
-            
-            print(f"✅ Ads chargées : {len(self.ads_data)} ads depuis {ads_file}")
-        
-        except Exception as e:
-            print(f"❌ Erreur chargement ads : {e}. ads_data reste vide.")
-    
-    def build_new_graph(self, k: int = 10):
-        """
-        Construit un nouveau graphe depuis les fichiers (priorité aux uploadés).
-        """
-        from generate_graph import build_graph, save_graph
-        
-        print(f"\n🔨 CONSTRUCTION D'UN NOUVEAU GRAPHE")
-        print(f"  - Fichier nodes: {self.nodes_file}")
-        print(f"  - Fichier ads: {self.ads_file}")
-        print(f"  - K-NN k: {k}")
+    def build_new_graph(self, k: int = 10) -> Dict:
+        """Construit un nouveau graphe"""
+        print(f" CONSTRUCTION DU GRAPHE (K={k})")
         
         start_time = time.time()
         
-        # Charger les données depuis les fichiers (priorité aux uploadés)
-        try:
-            nodes_df = pd.read_csv(self.nodes_file)
-            ads_df = pd.read_csv(self.ads_file)
-        except FileNotFoundError as e:
-            raise Exception(f"Fichier introuvable : {e}. Uploadez les fichiers via /upload-files ou vérifiez les noms.")
+        # Charger les données
+        print(" Chargement des fichiers CSV...")
+        load_start = time.time()
+        nodes_df, ads_df = load_data()
+        load_time = time.time() - load_start
+        print(f" Données chargées en {load_time:.3f}s")
+        
+        if nodes_df is None or ads_df is None:
+            raise Exception("Impossible de charger les données CSV")
         
         # Construire le graphe
-        self.graph = build_graph(nodes_df, k=k)
+        print(f"\n  Construction du graphe avec K-NN={k}...")
+        build_start = time.time()
+        self.graph = build_graph(nodes_df, ads_df, k=k)
+        build_time = time.time() - build_start
+        print(f" Graphe construit en {build_time:.3f}s")
         
         # Sauvegarder
-        save_graph(self.graph, os.path.dirname(self.graph_path))
+        print(f"\n Sauvegarde du graphe...")
+        save_start = time.time()
+        self._save_graph()
+        save_time = time.time() - save_start
+        print(f" Graphe sauvegardé en {save_time:.3f}s")
         
-        # Charger les ads
-        self.load_ads_data(self.ads_file)
+        total_time = time.time() - start_time
+        self.build_time = total_time
         
-        build_time = time.time() - start_time
         
-        print(f"✅ Graphe construit et sauvegardé en {build_time:.3f}s")
+        print(f" CONSTRUCTION TERMINÉE EN {total_time:.3f}s")
+        
         
         stats = self._get_graph_stats()
-        stats['build_time'] = build_time
+        
+        # Retourner les temps
+        stats['build_time'] = total_time
+        stats['load_time'] = load_time
+        stats['construction_time'] = build_time
+        stats['save_time'] = save_time
         
         return stats
     
-    def search_in_radius(self, node_id: str, ad_id: str, method: str = 'hybrid') -> List[str]:
-        """
-        Recherche depuis node_id en utilisant Y et D de ad_id.
-        """
-        if self.graph is None:
-            raise Exception("Aucun graphe chargé")
-        
-        if node_id not in self.graph:
-            raise Exception(f"Node {node_id} introuvable")
-        
-        if self.ads_data is None:
-            self.load_ads_data()
-        
-        if ad_id not in self.ads_data:
-            raise Exception(f"Ad {ad_id} introuvable")
-        
-        Y_vector = np.array(self.ads_data[ad_id]['Y_vector'])  
-        radius_X = self.ads_data[ad_id]['D']
-    
-        if method == 'naive':
-            nodes_found = search_naive(self.graph, node_id, Y_vector, radius_X)
-        elif method == 'bfs':
-            nodes_found = search_bfs(self.graph, node_id, Y_vector, radius_X)
-        elif method == 'dijkstra':
-            nodes_found = search_dijkstra(self.graph, node_id, Y_vector, radius_X)
-        elif method == 'hybrid':
-            nodes_found = search_hybrid(self.graph, node_id, Y_vector, radius_X)
-        else:
-            raise Exception(f"Méthode {method} inconnue")
-        
-        return [node_id for node_id, _ in nodes_found]
-    
     def load_existing_graph(self) -> Dict:
         """Charge un graphe existant"""
+        
         print(f" CHARGEMENT DU GRAPHE EXISTANT")
         
         if not os.path.exists(self.graph_path):
@@ -140,8 +98,6 @@ class GraphManager:
         
         print(f" Graphe chargé en {load_time:.3f}s")
         
-        if self.ads_data is None:
-            self.load_ads_data()
         
         stats = self._get_graph_stats()
         stats['load_time'] = load_time
@@ -155,6 +111,7 @@ class GraphManager:
         
         print(f" Sauvegarde vers: {self.graph_path}")
         
+        # S'assurer que le dossier existe
         os.makedirs(os.path.dirname(self.graph_path), exist_ok=True)
         
         with open(self.graph_path, 'wb') as f:
@@ -179,6 +136,7 @@ class GraphManager:
         ad_nodes = [n for n, d in self.graph.nodes(data=True) 
                    if d.get('node_type') == 'ad']
         
+        # Déterminer le nombre de features
         num_features = 0
         for node_id, node_data in self.graph.nodes(data=True):
             if 'features' in node_data:
@@ -197,6 +155,12 @@ class GraphManager:
     def get_graph_data(self, feature_indices: Tuple[int, int, int] = (0, 1, 2)) -> Dict:
         """
         Retourne les données du graphe pour la visualisation 3D
+        
+        Parameters:
+        - feature_indices: tuple de 3 indices (x, y, z) pour les axes 3D
+        
+        Returns:
+        - Dict avec 'nodes' et 'links' pour ForceGraph3D
         """
         if self.graph is None:
             raise Exception("Aucun graphe chargé")
@@ -222,6 +186,7 @@ class GraphManager:
                 'z': float(features[fz])
             }
             
+            # Ajouter le rayon D pour les ads
             if node_type == 'ad':
                 radius_D = node_data.get('radius_D')
                 if radius_D is not None:
@@ -229,6 +194,7 @@ class GraphManager:
             
             nodes.append(node_dict)
         
+        # Créer les liens
         links = []
         for source, target, edge_data in self.graph.edges(data=True):
             links.append({
@@ -350,7 +316,7 @@ class GraphManager:
         """Recherche Dijkstra avec file de priorité"""
         import heapq
         
-        nodes_found = []
+        nodes_found = {}  # CHANGÉ : Dictionnaire pour éviter les doublons
         visited = set()
         heap = [(0, ad_id)]
         
@@ -373,14 +339,15 @@ class GraphManager:
                 distance = compute_weighted_distance(ad_features, neighbor_features, Y_vector)
                 
                 if distance <= radius_X:
-                    nodes_found.append((neighbor, distance))  # CHANGÉ : Retourner tuple (id, distance)
+                    # CHANGÉ : Stocker seulement si pas déjà trouvé ou si distance plus petite
+                    if neighbor not in nodes_found or distance < nodes_found[neighbor]:
+                        nodes_found[neighbor] = distance
                     heapq.heappush(heap, (distance, neighbor))
         
-        # Trier par distance croissante
-        nodes_found.sort(key=lambda x: x[1])
+        # CHANGÉ : Convertir le dictionnaire en liste de tuples et trier
+        result = list(nodes_found.items())
+        result.sort(key=lambda x: x[1])
         
-        return nodes_found
+        return result
 
-# ...existing code...
-# Singleton global
 graph_manager = GraphManager()

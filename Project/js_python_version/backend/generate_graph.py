@@ -6,6 +6,7 @@ import time
 import os
 import pickle
 import heapq
+from typing import List, Tuple
 
 # ==================== ÉTAPE 1 : CHARGEMENT DES DONNÉES ====================
 
@@ -231,141 +232,20 @@ def load_graph(pickle_path):
         G = pickle.load(f)
     return G
 
-# ==================== NOUVELLES FONCTIONS DE RECHERCHE ====================
-
-def search_naive(G, start_node_id, Y_vector, radius_X):
     """
-    STRATÉGIE NAÏVE: Parcours exhaustif de tous les nœuds réguliers depuis start_node_id.
-    Complexité: O(N) où N = nombre de nœuds réguliers.
+    STRATÉGIE HYBRIDE: Choisit automatiquement la meilleure stratégie.
     """
-    start_features = np.array(G.nodes[start_node_id]['features'])
+    num_nodes = G.number_of_nodes()
     
-    nodes_found = []
-    nodes_checked = 0
-    
-    # Parcourir TOUS les nœuds réguliers
-    for node_id, node_data in G.nodes(data=True):
-        if node_data.get('node_type') != 'regular':
-            continue
-        
-        # AJOUTÉ : Exclure le node de départ
-        if node_id == start_node_id:
-            continue
-        
-        nodes_checked += 1
-        node_features = np.array(node_data['features'])
-        distance = compute_weighted_distance(start_features, node_features, Y_vector)
-        
-        if distance <= radius_X:
-            nodes_found.append((node_id, distance))
-    
-    # Trier par distance croissante
-    nodes_found.sort(key=lambda x: x[1])
-    
-    print(f"    Nœuds vérifiés: {nodes_checked}")
-    
-    return nodes_found
-
-def search_bfs(G, start_node_id, Y_vector, radius_X):
-    """
-    STRATÉGIE BFS: Parcours par arêtes du graphe depuis start_node_id.
-    Complexité: O(E) où E = nombre d'arêtes explorées.
-    """
-    start_features = np.array(G.nodes[start_node_id]['features'])
-    
-    nodes_found = []
-    visited = set()
-    queue = [start_node_id]
-    visited.add(start_node_id)
-    nodes_checked = 0
-    
-    while queue:
-        current = queue.pop(0)
-        
-        # Explorer les voisins
-        for neighbor in G.neighbors(current):
-            if neighbor in visited:
-                continue
-            
-            visited.add(neighbor)
-            
-            # Vérifier si c'est un nœud régulier
-            if G.nodes[neighbor].get('node_type') != 'regular':
-                continue
-            
-            # AJOUTÉ : Exclure le node de départ
-            if neighbor == start_node_id:
-                continue
-            
-            nodes_checked += 1
-            # Calculer la distance pondérée DIRECTE depuis start_node_id
-            neighbor_features = np.array(G.nodes[neighbor]['features'])
-            distance = compute_weighted_distance(start_features, neighbor_features, Y_vector)
-            
-            if distance <= radius_X:
-                nodes_found.append((neighbor, distance))
-                # Continuer l'exploration depuis ce nœud
-                queue.append(neighbor)
-    
-    # Trier par distance croissante
-    nodes_found.sort(key=lambda x: x[1])
-    
-    print(f"    Nœuds vérifiés: {nodes_checked}")
-    
-    return nodes_found
-
-def search_dijkstra(G, start_node_id, Y_vector, radius_X):
-    """
-    STRATÉGIE DIJKSTRA: Parcours optimisé avec file de priorité depuis start_node_id.
-    Complexité: O(E log V) où E = arêtes explorées, V = nœuds visités.
-    """
-    start_features = np.array(G.nodes[start_node_id]['features'])
-    
-    nodes_found = []
-    visited = set()
-    # File de priorité: (distance_directe, node_id)
-    heap = [(0, start_node_id)]
-    nodes_checked = 0
-    
-    while heap:
-        current_dist, current = heapq.heappop(heap)
-        
-        if current in visited:
-            continue
-        
-        visited.add(current)
-        
-        # Explorer les voisins
-        for neighbor in G.neighbors(current):
-            if neighbor in visited:
-                continue
-            
-            # Vérifier si c'est un nœud régulier
-            if G.nodes[neighbor].get('node_type') != 'regular':
-                continue
-            
-            # AJOUTÉ : Exclure le node de départ
-            if neighbor == start_node_id:
-                continue
-            
-            nodes_checked += 1
-            # Calculer la distance pondérée DIRECTE depuis start_node_id
-            neighbor_features = np.array(G.nodes[neighbor]['features'])
-            distance = compute_weighted_distance(start_features, neighbor_features, Y_vector)
-            
-            if distance <= radius_X:
-                nodes_found.append((neighbor, distance))
-                # Ajouter à la heap avec sa distance directe (priorité)
-                heapq.heappush(heap, (distance, neighbor))
-    
-    # Trier par distance croissante
-    nodes_found.sort(key=lambda x: x[1])
-    
-    print(f"    Nœuds vérifiés: {nodes_checked}")
-    
-    return nodes_found
-
-def search_hybrid(G, start_node_id, Y_vector, radius_X):
+    if num_nodes < 1000:
+        print(f"    Stratégie choisie: NAÏVE (graphe petit)")
+        return search_naive(G, start_node_id, Y_vector, radius_X)
+    elif num_nodes < 3000:
+        print(f"    Stratégie choisie: BFS (graphe moyen)")
+        return search_bfs(G, start_node_id, Y_vector, radius_X)
+    else:
+        print(f"    Stratégie choisie: DIJKSTRA (graphe grand)")
+        return search_dijkstra(G, start_node_id, Y_vector, radius_X)
     """
     STRATÉGIE HYBRIDE: Choisit automatiquement la meilleure stratégie.
     Logique basée sur la taille du graphe.

@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-API FastAPI pour le système de graphe publicitaire
+API FastAPI pour le graphe publicitaire
 """
 
-import os
-import time
-from typing import List
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.middleware.cors import CORSMiddleware  # AJOUTÉ
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import time
@@ -16,20 +13,29 @@ import os
 import csv
 from graph_manager import graph_manager
 
-app = FastAPI(title="Advertising Graph API", version="1.0.0")
+# Initialiser FastAPI
+app = FastAPI(
+    title="API Graphe Publicitaire",
+    description="API pour construire, charger et analyser un graphe publicitaire avec K-NN",
+    version="1.0.0",
+)
 
+# Configuration CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:8000"],  # Port par défaut de Vite (frontend)
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# ==================== MODÈLES PYDANTIC ====================
+
+class BuildGraphRequest(BaseModel):
+    k: int = 10
 
 class SearchRequest(BaseModel):
-    node_id: str
     ad_id: str
     method: str = 'hybrid'
 
@@ -56,128 +62,108 @@ async def upload_files(
     ads_file: UploadFile = File(...)
 ):
     """
-    Upload des fichiers CSV personnalisés
+    Upload les fichiers CSV (nodes et ads)
     """
     try:
-        # Sauvegarder nodes
-        nodes_path = os.path.join(script_dir, nodes_file.filename)
-        with open(nodes_path, "wb") as f:
-            f.write(await nodes_file.read())
+        backend_dir = os.path.dirname(os.path.abspath(__file__))
         
-        # Sauvegarder ads
-        ads_path = os.path.join(script_dir, ads_file.filename)
-        with open(ads_path, "wb") as f:
-            f.write(await ads_file.read())
+        # Vérifier les extensions
+        if not nodes_file.filename.endswith('.csv'):
+            raise HTTPException(status_code=400, detail="Le fichier nodes doit être un CSV")
+        if not ads_file.filename.endswith('.csv'):
+            raise HTTPException(status_code=400, detail="Le fichier ads doit être un CSV")
         
-        # Mettre à jour les chemins dans graph_manager (priorité aux uploadés)
-        graph_manager.nodes_file = nodes_path
-        graph_manager.ads_file = ads_path
+        # Sauvegarder le fichier nodes
+        nodes_path = os.path.join(backend_dir, "adsSim_data_nodes.csv")
+        with open(nodes_path, "wb") as buffer:
+            shutil.copyfileobj(nodes_file.file, buffer)
         
-        print(f"✅ Fichiers uploadés : {nodes_file.filename}, {ads_file.filename}")
+        # Sauvegarder le fichier ads
+        ads_path = os.path.join(backend_dir, "queries_structured.csv")
+        with open(ads_path, "wb") as buffer:
+            shutil.copyfileobj(ads_file.file, buffer)
         
-        return {"message": f"Fichiers uploadés : {nodes_file.filename}, {ads_file.filename}."}
-    
+        print(f"\n{'='*60}")
+        print(f"📁 FICHIERS UPLOADÉS")
+        print(f"{'='*60}")
+        print(f"✅ Nodes: {nodes_file.filename} → adsSim_data_nodes.csv")
+        print(f"✅ Ads: {ads_file.filename} → queries_structured.csv")
+        print(f"{'='*60}\n")
+        
+        return {
+            "message": "Fichiers uploadés avec succès",
+            "nodes_file": nodes_file.filename,
+            "ads_file": ads_file.filename,
+            "nodes_path": "adsSim_data_nodes.csv",
+            "ads_path": "queries_structured.csv"
+        }
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur upload : {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/build-graph")
-def build_graph(k: int = 10):
+def build_graph(request: BuildGraphRequest):
     """
-    Construit le graphe depuis les fichiers (uploadés en priorité, sinon défauts).
+    Construit un nouveau graphe avec K-NN
     """
     try:
-        result = graph_manager.build_new_graph(k=k)
-        print(f"DEBUG: Après build, ads_data = {len(graph_manager.ads_data) if graph_manager.ads_data else 0} ads")
-        return result
+        stats = graph_manager.build_new_graph(k=request.k)
+        return {
+            "message": f"Graphe construit avec succès (K={request.k})",
+            "stats": stats
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/load-graph")
-def load_graph():
-    """
-    Charge un graphe sauvegardé.
-    """
-    try:
-        result = graph_manager.load_existing_graph()
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/graph-stats")
-def get_graph_stats():
-    """
-    Retourne les statistiques du graphe chargé.
-    """
-    try:
-        return graph_manager._get_graph_stats()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/graph-data")
-def get_graph_data(fx: int = 0, fy: int = 1, fz: int = 2):
+def get_graph_data(
+    feature_x: int = 0,
+    feature_y: int = 1,
+    feature_z: int = 2
+):
     """
-    Retourne les données du graphe pour visualisation 3D.
+    Retourne les données du graphe pour la visualisation 3D
     """
     try:
-        return graph_manager.get_graph_data((fx, fy, fz))
+        data = graph_manager.get_graph_data((feature_x, feature_y, feature_z))
+        return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-# Dans main.py, ajoutez après les autres endpoints
-
-@app.get("/ads-data")
-def get_ads_data():
-    """
-    Retourne les données des ads (Y_vector, D).
-    """
-    try:
-        if graph_manager.ads_data is None:
-            graph_manager.load_ads_data()
-        
-        # Si toujours None ou vide, retourner un objet vide au lieu d'erreur
-        if graph_manager.ads_data is None or not graph_manager.ads_data:
-            print("⚠️ Aucune donnée ads chargée, retour d'objet vide")
-            return {}
-        
-        return graph_manager.ads_data
-    except Exception as e:
-        print(f"❌ Erreur dans /ads-data: {e}")
-        # Retourner un objet vide au lieu de 500
-        return {}
-
 
 
 @app.post("/search")
 def search_in_radius(request: SearchRequest):
     """
-    Recherche les nœuds dans le rayon D d'un ad, en partant d'un node régulier.
+    Recherche les nœuds dans le rayon D d'un ad.
+    Le rayon D est automatiquement récupéré depuis les propriétés de l'ad.
     """
     try:
         start_time = time.time()
         
-        print(f"🔍 RECHERCHE DANS LE RAYON D")
-        print(f"Node de départ: {request.node_id}")
-        print(f"Ad: {request.ad_id}")
-        print(f"Méthode: {request.method}")
-        
+        # Récupérer le rayon D depuis le graphe
         if graph_manager.graph is None:
-            raise HTTPException(status_code=400, detail="Aucun graphe chargé. Utilisez /build-graph ou /load-graph d'abord.")
+            raise HTTPException(status_code=400, detail="Aucun graphe chargé")
         
-        if graph_manager.ads_data is None:
-            graph_manager.load_ads_data()
+        if request.ad_id not in graph_manager.graph:
+            raise HTTPException(status_code=404, detail=f"Ad {request.ad_id} introuvable")
         
-        if not graph_manager.ads_data:
-            raise HTTPException(status_code=400, detail="Aucune ad chargée. Vérifiez le fichier CSV des ads.")
+        ad_data = graph_manager.graph.nodes[request.ad_id]
+        radius_D = ad_data.get('radius_D')
         
-        if request.ad_id not in graph_manager.ads_data:
-            raise HTTPException(status_code=404, detail=f"Ad {request.ad_id} introuvable.")
+        if radius_D is None:
+            raise HTTPException(status_code=400, detail=f"Rayon D non défini pour {request.ad_id}")
         
-        radius_D = graph_manager.ads_data[request.ad_id]['D']
+        print(f"🔍 RECHERCHE DANS LE RAYON D")
+        print(f"Ad: {request.ad_id}")
         print(f"Rayon D: {radius_D:.6f}")
+        print(f"Méthode: {request.method}")
         
         # Effectuer la recherche avec le rayon D
         nodes_found_with_dist = graph_manager.search_in_radius(
             request.ad_id,
+            radius_D,
             request.method
         )
         
@@ -191,7 +177,6 @@ def search_in_radius(request: SearchRequest):
                       for node_id, distance in nodes_found_with_dist]
         
         return {
-            "node_id": request.node_id,
             "ad_id": request.ad_id,
             "radius_D": radius_D,
             "method_used": request.method,
@@ -203,7 +188,6 @@ def search_in_radius(request: SearchRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Erreur dans /search: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -293,7 +277,7 @@ def search_all(method: str = 'hybrid'):
         print(f"   - Temps total: {elapsed_time:.3f}s")
         print(f"   - Temps moyen par ad: {elapsed_time/len(ad_nodes):.3f}s")
         print(f"📁 Fichier généré: {csv_filename}")
-        print(f"{'='*60}\n")
+        # print(f"{'='*60}\n")
         
         return {
             "message": "Recherche globale terminée",
@@ -304,7 +288,7 @@ def search_all(method: str = 'hybrid'):
             "average_time_per_ad": elapsed_time / len(ad_nodes) if ad_nodes else 0,
             "csv_file": csv_filename,
             "csv_path": csv_path,
-            "results_preview": results[:5]  # Aperçu des 5 premiers résultats
+            "results_preview": results  # Aperçu des 5 premiers résultats
         }
         
     except HTTPException:
@@ -314,4 +298,14 @@ def search_all(method: str = 'hybrid'):
         raise HTTPException(status_code=500, detail=str(e))
     
 if __name__ == "__main__":
+    import uvicorn
+    
+    print("\n" + "="*60)
+    print("🚀 DÉMARRAGE DE L'API GRAPHE PUBLICITAIRE")
+    print("="*60)
+    print("📍 URL: http://localhost:8000")
+    print("📖 Documentation: http://localhost:8000/docs")
+    print("📘 ReDoc: http://localhost:8000/redoc")
+    print("="*60 + "\n")
+    
     uvicorn.run(app, host="0.0.0.0", port=8000)
