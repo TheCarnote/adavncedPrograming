@@ -1,7 +1,28 @@
+# Framework web
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-pandas==2.1.3
+
+# Traitement de données
+pandas==2.1.4
 numpy==1.26.2
+
+# Graphes et réseaux
 networkx==3.2.1
+
+# Machine Learning
 scikit-learn==1.3.2
+
+# Upload de fichiers et validation
 python-multipart==0.0.6
+pydantic==2.5.0
+
+# Gestion des fichiers CSV et système
+typing-extensions==4.8.0
+
+# Utilitaires pour les calculs
+heapq  # Module intégré Python (pas besoin d'installation)
+pickle # Module intégré Python (pas besoin d'installation)
+csv    # Module intégré Python (pas besoin d'installation)
+os     # Module intégré Python (pas besoin d'installation)
+time   # Module intégré Python (pas besoin d'installation)
+datetime # Module intégré Python (pas besoin d'installation)
