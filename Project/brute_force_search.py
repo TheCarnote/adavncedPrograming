@@ -8,28 +8,25 @@ Usage
 python brute_force_search.py <points.csv> <queries.csv> [output.csv]
 
 - <points.csv>  : CSV contenant au minimum les colonnes 'node_id' et 'feature_1'..'feature_50' (autres colonnes ignorées).
-- <queries.csv> : CSV contenant au minimum les colonnes 'point_A', 'Y_vector', 'D'.
-                  'Y_vector' est une chaîne de 50 poids séparés par ';'.
+- <queries.csv> : CSV contenant au minimum les colonnes 'point_A', 'Y_vector', 'D', et **de préférence** 'A_vector'.
+                  'Y_vector' et 'A_vector' sont des chaînes de 50 valeurs séparées par ';'.
 - [output.csv]  : (optionnel) fichier de sortie, par défaut 'responses.csv'.
 
 Méthode
 -------
-Pour chaque requête q=(point_A, Y, D), on génère un vecteur A (50 dim) déterministe à partir de 'point_A'
-(supposé ne pas appartenir au graphe), puis on calcule la distance euclidienne pondérée:
+Pour chaque requête q=(point_A, A, Y, D), on calcule la distance euclidienne pondérée:
 
     dist(A, P) = sqrt( sum_i ( Y_i * (A_i - P_i)^2 ) )
 
 On retourne tous les noeuds P tels que dist(A,P) <= D. Implémentation 100% brute-force (pas d'optimisations).
 
-Remarque
---------
-Afin de rendre la génération de A **reproductible**, on utilise un seed dérivé de 'point_A'.
-Par défaut, A est généré en [0,100] (réels) pour chaque dimension.
+Compatibilité
+-------------
+Si la colonne 'A_vector' est absente, on **génère** un vecteur A (50 dim) de manière **déterministe** à partir de
+'point_A' (seed dérivé), pour rester compatible avec les anciens jeux de requêtes.
 """
-
 from __future__ import annotations
 import sys
-import math
 import hashlib
 from typing import List, Tuple
 
@@ -38,46 +35,25 @@ import pandas as pd
 
 NUM_FEATURES = 50
 
+def parse_vec_50(semicol_str: str, label: str) -> np.ndarray:
+    parts = [p.strip() for p in str(semicol_str).split(';') if p.strip() != '']
+    arr = np.array([float(x) for x in parts], dtype=float)
+    if arr.shape[0] != NUM_FEATURES:
+        raise ValueError(f"{label} length {arr.shape[0]} != {NUM_FEATURES}")
+    return arr
+
 def parse_weights(y_str: str) -> np.ndarray:
-    """Parse a 'Y_vector' string like '0.1;0.2;...' into a numpy array of shape (50,)."""
-    parts = [p.strip() for p in str(y_str).split(';') if p.strip() != '']
-    weights = np.array([float(x) for x in parts], dtype=float)
-    if weights.shape[0] != NUM_FEATURES:
-        raise ValueError(f"Y_vector length {weights.shape[0]} != {NUM_FEATURES}")
-    return weights
+    return parse_vec_50(y_str, 'Y_vector')
+
+def parse_A(a_str: str) -> np.ndarray:
+    return parse_vec_50(a_str, 'A_vector')
 
 def generate_A(point_A: str) -> np.ndarray:
-    """Generate a deterministic 50-dim vector A in [0,100] seeded by point_A.
-
-    This mirrors the idea that A (e.g., an ad or user profile) is not part of the graph but exists in the same feature space.
-    """
-    # Derive a 64-bit integer seed from the query id
+    """Generate a deterministic 50-dim vector A in [0,100] seeded by point_A."""
     h = hashlib.sha256(point_A.encode('utf-8')).hexdigest()
     seed = int(h[:16], 16) % (2**32)
     rng = np.random.default_rng(seed)
-
-    # Option 1 (simple & uniform):
-    A = rng.uniform(0.0, 100.0, size=NUM_FEATURES).astype(float)
-
-    # If you'd like a "sparse peaks" version similar to the draft, uncomment below:
-    # A = np.zeros(NUM_FEATURES, dtype=float)
-    # k_hi = rng.integers(low=1, high=4)
-    # k_md = rng.integers(low=4, high=10)
-    # hi_idx = rng.choice(NUM_FEATURES, size=k_hi, replace=False)
-    # md_pool = [i for i in range(NUM_FEATURES) if i not in hi_idx]
-    # md_idx = rng.choice(md_pool, size=k_md, replace=False)
-    # A[hi_idx] = rng.uniform(80, 100, size=k_hi)
-    # A[md_idx] = rng.uniform(40, 70, size=k_md)
-
-    return A
-
-def extract_point_vector(row: pd.Series, feature_cols: List[str]) -> np.ndarray:
-    return row[feature_cols].to_numpy(dtype=float)
-
-def weighted_euclidean(a: np.ndarray, p: np.ndarray, w: np.ndarray) -> float:
-    # Ensure all arrays are 1D of length NUM_FEATURES
-    diff = a - p
-    return float(np.sqrt(np.sum(w * diff * diff)))
+    return rng.uniform(0.0, 100.0, size=NUM_FEATURES).astype(float)
 
 def brute_force_search(points_df: pd.DataFrame, queries_df: pd.DataFrame) -> List[Tuple[str, float, List[Tuple[str, float]]]]:
     # Identify the 50 feature columns (tolerant to extra columns like 'cluster_id')
@@ -92,15 +68,20 @@ def brute_force_search(points_df: pd.DataFrame, queries_df: pd.DataFrame) -> Lis
     node_ids = points_df['node_id'].astype(str).to_list()
     points_mat = points_df[feature_cols].to_numpy(dtype=float)
 
+    has_A = 'A_vector' in queries_df.columns
+
     for _, q in queries_df.iterrows():
         q_id = str(q['point_A'])
         D = float(q['D'])
         Y = parse_weights(q['Y_vector'])
-        A = generate_A(q_id)
 
-        # Compute distances to all nodes
-        # Broadcasting: (N,50) - (50,) -> (N,50)
-        diff = points_mat - A
+        if has_A:
+            A = parse_A(q['A_vector'])
+        else:
+            A = generate_A(q_id)  # Backward compatibility
+
+        # Compute distances to all nodes (vectorized)
+        diff = points_mat - A  # (N,50)
         dists = np.sqrt(np.sum(Y * diff * diff, axis=1))
 
         # Collect matches within radius D
@@ -149,6 +130,7 @@ def main(argv: List[str]) -> None:
     for col in ('point_A', 'Y_vector', 'D'):
         if col not in queries_df.columns:
             raise KeyError(f"Queries file must contain '{col}' column")
+    # A_vector is optional but recommended
 
     # Compute brute-force results
     results = brute_force_search(points_df, queries_df)
