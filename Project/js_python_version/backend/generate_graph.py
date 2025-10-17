@@ -42,6 +42,7 @@ def compute_weighted_distance(features_A, features_B, Y_vector):
     """
     diff = features_A - features_B
     weighted_squared_diff = Y_vector * (diff ** 2)
+    # print(weighted_squared_diff)
     return np.sqrt(np.sum(weighted_squared_diff))
 
 
@@ -87,7 +88,7 @@ def add_regular_nodes_with_knn(G, nodes_df, k=10):
     return G
 
 
-def add_ads_with_weighted_connections(G, ads_df, nodes_df):
+def add_ads(G, ads_df, nodes_df):
     """
     Ajoute les ads au graphe et les connecte aux nœuds réguliers
     selon la distance pondérée d_Y ≤ D
@@ -100,25 +101,27 @@ def add_ads_with_weighted_connections(G, ads_df, nodes_df):
     node_ids = nodes_df['node_id'].values
     
     total_ads = 0
-    total_connections = 0
+    # total_connections = 0
     
     for idx, row in ads_df.iterrows():
         ad_id = row['point_A']
+        A_vector_str = row['A_vector']
         Y_vector_str = row['Y_vector']
         radius_D = row['D']
         
         # Parser le vecteur Y
         Y_vector = np.array([float(x) for x in Y_vector_str.split(';')])
         
+        
         # Récupérer les features de l'ad (basé sur le node correspondant)
-        node_number = ad_id.split('_')[1]
-        node_idx = int(node_number) - 1  # node_1 -> index 0
+        # node_number = ad_id.split('_')[1]
+        # node_idx = int(node_number) - 1  # node_1 -> index 0
         
-        if node_idx >= len(nodes_features):
-            print(f"  Warning: Ad {ad_id} hors limites, ignoré")
-            continue
+        # if node_idx >= len(nodes_features):
+        #     print(f"  Warning: Ad {ad_id} hors limites, ignoré")
+        #     continue
         
-        ad_features = nodes_features[node_idx]
+        ad_features = np.array([float(x) for x in A_vector_str.split(';')])
         
         # Ajouter l'ad au graphe
         G.add_node(ad_id,
@@ -143,16 +146,16 @@ def add_ads_with_weighted_connections(G, ads_df, nodes_df):
                           weight=distance)
                 connections_count += 1
         
-        total_connections += connections_count
+        # total_connections += connections_count
         
-        # Afficher les 5 premiers ads
-        if idx < 5:
-            print(f"   {ad_id}: {connections_count} connexions (D={radius_D:.2f})")
+        # # Afficher les 5 premiers ads
+        # if idx < 5:
+        #     print(f"   {ad_id}: {connections_count} connexions (D={radius_D:.2f})")
     
     print(f" Ads ajoutés:")
     print(f"   - {total_ads} ads")
-    print(f"   - {total_connections} arêtes (distance pondérée d_Y ≤ D)")
-    print(f"   - Moyenne: {total_connections/total_ads:.1f} connexions par ad")
+    # print(f"   - {total_connections} arêtes (distance pondérée d_Y ≤ D)")
+    # print(f"   - Moyenne: {total_connections/total_ads:.1f} connexions par ad")
     
     return G
 
@@ -173,7 +176,7 @@ def build_graph(nodes_df, ads_df, k=10):
     G = add_regular_nodes_with_knn(G, nodes_df, k)
     
     # 2. Ajouter les ads + connexions pondérées
-    G = add_ads_with_weighted_connections(G, ads_df, nodes_df)
+    G = add_ads(G, ads_df, nodes_df)
     
     # Statistiques globales
     print(f"\n STATISTIQUES DU GRAPHE:")

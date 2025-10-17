@@ -210,13 +210,13 @@ class GraphManager:
             'nodes': nodes,
             'links': links
         }
-    
-    def search_in_radius(self, ad_id: str, radius_X: float, method: str = 'hybrid') -> List[str]:
+
+    def search_in_radius(self, ad_id: str, radius_X: float, method: str = 'hybrid') -> List[Tuple[str, float]]:
         """
         Recherche les nœuds dans le rayon X autour d'un ad
         
         Returns:
-        - Liste des IDs des nœuds trouvés
+        - Liste de tuples (node_id, distance)
         """
         if self.graph is None:
             raise Exception("Aucun graphe chargé")
@@ -228,7 +228,7 @@ class GraphManager:
         ad_features = ad_data['features']
         Y_vector = ad_data['Y_vector']
         
-        print(f"\n Recherche autour de {ad_id}")
+        print(f"\n🔍 Recherche autour de {ad_id}")
         print(f"   Rayon X: {radius_X:.4f}")
         print(f"   Méthode: {method}")
         
@@ -258,11 +258,11 @@ class GraphManager:
         else:
             raise ValueError(f"Méthode inconnue: {method}")
         
-        print(f" {len(nodes_found)} nœuds trouvés")
+        print(f"✅ {len(nodes_found)} nœuds trouvés")
         
         return nodes_found
-    
-    def _search_naive(self, ad_features, Y_vector, radius_X) -> List[str]:
+
+    def _search_naive(self, ad_features, Y_vector, radius_X) -> List[Tuple[str, float]]:
         """Recherche naïve (parcours complet)"""
         nodes_found = []
         
@@ -274,11 +274,14 @@ class GraphManager:
             distance = compute_weighted_distance(ad_features, node_features, Y_vector)
             
             if distance <= radius_X:
-                nodes_found.append(node_id)
+                nodes_found.append((node_id, distance))  # CHANGÉ : Retourner tuple (id, distance)
+        
+        # Trier par distance croissante
+        nodes_found.sort(key=lambda x: x[1])
         
         return nodes_found
-    
-    def _search_bfs(self, ad_id, ad_features, Y_vector, radius_X) -> List[str]:
+
+    def _search_bfs(self, ad_id, ad_features, Y_vector, radius_X) -> List[Tuple[str, float]]:
         """Recherche BFS"""
         nodes_found = []
         visited = set()
@@ -301,12 +304,15 @@ class GraphManager:
                 distance = compute_weighted_distance(ad_features, neighbor_features, Y_vector)
                 
                 if distance <= radius_X:
-                    nodes_found.append(neighbor)
+                    nodes_found.append((neighbor, distance))  # CHANGÉ : Retourner tuple (id, distance)
                     queue.append(neighbor)
         
+        # Trier par distance croissante
+        nodes_found.sort(key=lambda x: x[1])
+        
         return nodes_found
-    
-    def _search_dijkstra(self, ad_id, ad_features, Y_vector, radius_X) -> List[str]:
+
+    def _search_dijkstra(self, ad_id, ad_features, Y_vector, radius_X) -> List[Tuple[str, float]]:
         """Recherche Dijkstra avec file de priorité"""
         import heapq
         
@@ -333,11 +339,14 @@ class GraphManager:
                 distance = compute_weighted_distance(ad_features, neighbor_features, Y_vector)
                 
                 if distance <= radius_X:
-                    nodes_found.append(neighbor)
+                    nodes_found.append((neighbor, distance))  # CHANGÉ : Retourner tuple (id, distance)
                     heapq.heappush(heap, (distance, neighbor))
+        
+        # Trier par distance croissante
+        nodes_found.sort(key=lambda x: x[1])
         
         return nodes_found
 
-
+# ...existing code...
 # Singleton global
 graph_manager = GraphManager()
